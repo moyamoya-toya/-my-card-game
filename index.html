@@ -786,20 +786,31 @@
 
     // 手札のカードを選択/選択解除
     function toggleSelect(buttonId, cardNo) {
-        console.log('表面のボタンがクリックされました - ボタンID', buttonId, ' カードNo', cardNo);
+        console.log(`toggleSelect called for button ID: ${buttonId}, card No: ${cardNo}`);
+        console.log(`Before toggle: selectedFrontCardNo = ${selectedFrontCardNo}`);
 
         const button = document.getElementById(buttonId);
         const isSelected = button.innerText === '選択中';
+        console.log(`Button is currently selected: ${isSelected}`);
 
         // 他の選択中の表面カードの選択を解除
-        if (selectedFrontCardNo !== null) {
-            const allSelectButtons = document.querySelectorAll('#hand-field button[id^="select-button-"]');
-            allSelectButtons.forEach(btn => {
-                if (btn.getAttribute('data-card-number') === selectedFrontCardNo) {
-                    btn.innerText = '選択';
-                }
-            });
-        }
+        // 手札フィールド内の全ての「選択」ボタンを取得
+        const allSelectButtons = document.querySelectorAll('#hand-field button[id^="select-button-"]');
+        allSelectButtons.forEach(btn => {
+            const btnCardNumber = btn.getAttribute('data-card-number');
+            // 現在選択中のカードと一致する場合、またはクリックされたカードと一致する場合以外をリセット
+            // ここでselectedFrontCardNoがnullでないことを確認
+            if (selectedFrontCardNo !== null && btnCardNumber === selectedFrontCardNo && btn.id !== buttonId) {
+                 btn.innerText = '選択';
+                 console.log(`Deselecting previously selected button: ${btn.id} for card ${btnCardNumber}`);
+            }
+             // クリックされた以外のボタンで「選択中」になっているものをリセット（念のため）
+            if (btn.id !== buttonId && btn.innerText === '選択中') {
+                 btn.innerText = '選択';
+                 console.log(`Deselecting another selected button: ${btn.id} for card ${btnCardNumber}`);
+            }
+        });
+
 
         // クリックされたカードを選択状態にする
         if (!isSelected) {
@@ -807,12 +818,14 @@
             selectedFrontCardNo = cardNo;
             updateInfoPanel(cardNo);
             updateDebugPanelWithCardDetails(cardNo); // デバッグパネルに詳細を表示
+             console.log(`Selected card ${cardNo}. selectedFrontCardNo is now ${selectedFrontCardNo}`);
         } else {
             // 同じカードがクリックされた場合は選択解除
             button.innerText = '選択';
             selectedFrontCardNo = null;
             updateInfoPanelDefault();
             updateDebugPanelWithCardDetails(null); // デバッグパネルの詳細をクリア
+             console.log(`Deselected card ${cardNo}. selectedFrontCardNo is now ${selectedFrontCardNo}`);
         }
 
         updateDebugPanel();
@@ -1085,17 +1098,23 @@
                        }
 
                        // 共通の場のカードリストに移動したカードを追加
-                       const backCardIndex = commonCards.indexOf(parseInt(selectedBackCardNo));
-                       if (backCardIndex > -1) {
-                           if (selectedBackCardButton === 'left') {
-                               commonCards.splice(backCardIndex, 0, parseInt(selectedFrontCardNo)); // 左に挿入
-                           } else {
-                               commonCards.splice(backCardIndex + 1, 0, parseInt(selectedFrontCardNo)); // 右に挿入
-                           }
-                           updateCommonDisplay(); // 場札の表示を更新
-                            console.log("更新された場札:", commonCards);
+                       const backCardIndex = commonCards.indexOf(parseInt(selectedFrontCardNo)); // 挿入するカードのインデックスではなく、移動したカードのナンバーで検索
+                       if (backCardIndex === -1) { // 共通の場にまだ存在しない場合のみ追加
+                            const targetCardNo = parseInt(selectedBackCardNo);
+                            const targetIndexInCommon = commonCards.indexOf(targetCardNo);
+                            if (targetIndexInCommon > -1) {
+                                if (selectedBackCardButton === 'left') {
+                                    commonCards.splice(targetIndexInCommon, 0, parseInt(selectedFrontCardNo)); // 左に挿入
+                                } else {
+                                    commonCards.splice(targetIndexInCommon + 1, 0, parseInt(selectedFrontCardNo)); // 右に挿入
+                                }
+                                console.log("更新された場札データ:", commonCards);
+                            } else {
+                                console.warn(`エラー: 場札データからターゲットカード ${selectedBackCardNo} を見つけられませんでした。`);
+                            }
+                            updateCommonDisplay(); // 場札の表示を更新
                        } else {
-                           console.warn(`エラー: 場札データからカード ${selectedBackCardNo} を見つけられませんでした。`);
+                           console.warn(`警告: カード ${selectedFrontCardNo} は既に場札データに存在します。`);
                        }
 
 
@@ -1213,15 +1232,20 @@
 
     // 選択状態をリセット
     function resetSelectionState() {
+        console.log("Resetting selection state.");
         // 手札の選択状態をリセット
         if (selectedFrontCardNo !== null) {
             const allSelectButtons = document.querySelectorAll('#hand-field button[id^="select-button-"]');
               allSelectButtons.forEach(btn => {
-                  if (btn.getAttribute('data-card-number') === selectedFrontCardNo) {
-                      btn.innerText = '選択';
-                  }
+                  const btnCardNumber = btn.getAttribute('data-card-number');
+                   // 現在選択中のカードと一致する場合のみリセット
+                   if (btnCardNumber === selectedFrontCardNo) {
+                        btn.innerText = '選択';
+                        console.log(`Resetting button text for card ${btnCardNumber}`);
+                   }
               });
             selectedFrontCardNo = null;
+            console.log(`selectedFrontCardNo reset to ${selectedFrontCardNo}`);
         }
 
         // 裏面ボタンの表示をリセット
@@ -1231,21 +1255,24 @@
              } else if (lastSelectedBackButtonElement.id.startsWith('right-button-')) {
                  lastSelectedBackButtonElement.innerText = '右';
              }
+             console.log(`Resetting back button text for ${lastSelectedBackButtonElement.id}`);
              lastSelectedBackButtonElement = null; // 記録した要素をクリア
         }
 
         selectedBackCardNo = null;
         selectedBackCardButton = null; // 裏面選択ボタンの状態もリセット
+        console.log(`selectedBackCardNo reset to ${selectedBackCardNo}, selectedBackCardButton reset to ${selectedBackCardButton}`);
 
 
         updateInfoPanelDefault(); // カード情報パネルをデフォルトに戻す
         updateDebugPanel(); // デバッグパネルの表示を更新 (カード詳細もクリアされる)
         updateDecisionButtonState(); // 決定ボタンの状態を更新
+         console.log("Selection state reset complete.");
     }
 
     // ページ読み込み完了後にCSVを読み込み、ゲームを初期化
     document.addEventListener('DOMContentLoaded', (event) => {
-        // CSVファイルからの読み込みを有効化
+        // GitHub Pagesでのファイル読み込みに対応するためパスを修正
         const csvUrl = './sample.csv'; // GitHub Pages上のCSVファイルへの相対パス
 
         fetch(csvUrl)
@@ -1269,16 +1296,6 @@
                 document.getElementById('game-message').innerText = `カードデータの読み込みに失敗しました。エラー: ${error.message}。ファイル (sample.csv) がGitHub Pagesに正しく配置されているか確認してください。`;
                 document.getElementById('game-message').style.color = 'red';
             });
-
-        // 提供されたCSVデータを直接埋め込む部分はコメントアウト
-        /*
-        const csvContent = "カードのタイトル,年,月,日,カードのナンバー,出来事の概要\r\n流派「静寂」設立の集まり,2002,4,1,1,五感を重視する癒やしの流派「静寂」が、都内からの移住者を中心に結成された。\r\n流派「疾風」高速予約システム開発,2007,9,20,2,スピードと効率を追求する流派「疾風」が、待ち時間を大幅に短縮するシステムを開発。\r\n流派「古都」伝統保存会の発足,2010,6,15,3,昔ながらのサービスと人情を重んじる人々が、「古都」流派として伝統継承を決意。\r\n流派「静寂」アロマセラピー導入,2013,7,5,4,癒やしを深めるため、香りによるリラクゼーション効果を取り入れた。";
-
-        // CSVデータを解析
-        const parsedData = parseCardData(csvContent);
-        // ゲームを初期化
-        initializeGame(parsedData);
-        */
     });
 
 
