@@ -545,8 +545,1148 @@
 
 
 <script>
-    // デバッグ用: JavaScriptが実行されたか確認するためのalert。問題解決後に削除してください。
-    alert("Test Script");
+    console.log("Script execution started."); // JavaScriptが実行されたか確認するためのログ
+
+    // CSVファイルのURLを指定
+    // GitHub Pagesなどで公開しているCSVファイルのraw URLを指定してください
+    const csvUrl = 'https://raw.githubusercontent.com/moyamoya-toya/-my-card-game/refs/heads/main/sample.csv';
+
+    // GitHub Pagesの画像ディレクトリのベースURL
+    // フォルダ名を 'image' から 'images' に修正
+    const IMAGE_BASE_URL = 'https://moyamoya-toya.github.io/-my-card-game/images/';
+    // 画像ファイルの拡張子のリスト
+    const IMAGE_EXTENSIONS = ['gif', 'jpeg', 'jpg', 'png'];
+
+    // localStorageに保存する手札枚数のキー
+    const LOCAL_STORAGE_HAND_SIZE_KEY = 'initialHandSize';
+
+
+    let cardDetails = {}; // CSVから読み込むため初期化
+    let cardEvents = {};   // CSVから読み込むため初期化
+    let allCardNumbers = []; // CSVから読み込むため初期化
+
+    let handCards = [];
+    let commonCards = [];
+    let deckCards = [];
+    let discardPile = [];
+
+    let successfulPlacements = 0;
+    let failedPlacements = 0;
+
+    let selectedFrontCardNo = null;
+    let selectedBackCardNo = null;
+    let selectedBackCardButton = null;
+    let lastSelectedBackButtonElement = null;
+
+
+    // CSVデータからカード情報を生成する関数 (ダブルクォーテーション対応強化)
+    function parseCardData(csvText) {
+        const lines = csvText.trim().split(/\r\n|\n/);
+        if (lines.length === 0) {
+            console.error("CSVファイルが空です。");
+            return { cardDetails: {}, cardEvents: {} };
+        }
+
+        // ヘッダー行を解析
+        const headerLine = lines[0];
+        // ヘッダーを正規表現で分割（ダブルクォーテーション内のカンマを無視）
+        const headers = headerLine.match(/(".*?"|[^",]+)(?=,|$)/g).map(h => h.replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+        const parsedCardDetails = {};
+        const parsedCardEvents = {};
+
+        // ヘッダーのインデックスを取得
+        const titleIndex = headers.indexOf('カードのタイトル');
+        const yearIndex = headers.indexOf('年');
+        const monthIndex = headers.indexOf('月');
+        const dayIndex = headers.indexOf('日');
+        const numberIndex = headers.indexOf('カードのナンバー');
+        const eventIndex = headers.indexOf('出来事の概要');
+        const imageIndex = headers.indexOf('画像ファイル名');
+
+        // 必要なヘッダーが存在するか確認
+        if (titleIndex === -1 || yearIndex === -1 || monthIndex === -1 || dayIndex === -1 || numberIndex === -1 || eventIndex === -1 || imageIndex === -1) {
+            console.error("CSVヘッダーが不正です。必要な列 (カードのタイトル, 年, 月, 日, カードのナンバー, 出来事の概要, 画像ファイル名) が存在しません。");
+            return { cardDetails: {}, cardEvents: {} };
+        }
+
+        // データ行を解析
+        for (let i = 1; i < lines.length; i++) {
+            const dataLine = lines[i];
+            // データ行を正規表現で分割（ダブルクォーテーション内のカンマを無視）
+            const values = dataLine.match(/(".*?"|[^",]+)(?=,|$)/g);
+
+             // valuesがnullまたはヘッダー数と一致しない場合はスキップ
+            if (!values || values.length !== headers.length) {
+                 console.warn(`列数がヘッダーと一致しない行をスキップしました: ${lines[i]}`);
+                 continue;
+            }
+
+            // 各フィールドからダブルクォーテーションを外し、エスケープされたダブルクォーテーションを戻す
+            const cleanedValues = values.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+            const cardTitle = cleanedValues[titleIndex];
+            const year = parseInt(cleanedValues[yearIndex]);
+            const month = parseInt(cleanedValues[monthIndex]);
+            const day = parseInt(cleanedValues[dayIndex]);
+            const cardNumber = parseInt(cleanedValues[numberIndex]);
+            const eventSummary = cleanedValues[eventIndex];
+            const imageFileNameBase = cleanedValues[imageIndex] ? cleanedValues[imageIndex].trim() : null;
+
+            if (!isNaN(cardNumber)) { // カードナンバーが有効な数値か確認
+                 parsedCardDetails[cardNumber] = {
+                     "年": isNaN(year) ? null : year,
+                     "月": isNaN(month) ? null : month,
+                     "日": isNaN(day) ? null : day,
+                     "タイトル": cardTitle || "タイトル不明",
+                     "出来事の概要": eventSummary || "不明", // 出来事の概要もここに格納
+                     "画像ファイル名ベース": imageFileNameBase
+                 };
+                 // cardEvents は不要になるため削除または使用しない
+                 // parsedCardEvents[cardNumber] = eventSummary || "不明";
+            } else {
+                console.warn(`不正なカードナンバーの行をスキップしました: ${lines[i]}`);
+            }
+        }
+         // cardEvents は使用しないので、cardDetails のみ返すように変更
+         return { cardDetails: parsedCardDetails, cardEvents: {} }; // cardEvents は空で返す
+    }
+
+
+    // ゲームの初期化処理（CSV読み込み後に実行）
+    function initializeGame(parsedData) {
+        console.log("initializeGame started."); // 初期化開始ログ
+        cardDetails = parsedData.cardDetails;
+        // cardEvents は parseCardData の修正により不要になりました
+        // cardEvents = parsedData.cardEvents;
+
+        // CSVから読み込んだ全てのカードナンバーを取得
+        allCardNumbers = Object.keys(cardDetails).map(Number);
+
+        // CSVから読み込んだカードが1枚以下の場合、ゲームを開始できない
+        if (allCardNumbers.length <= 1) {
+             document.getElementById('game-message').innerText = 'カードデータが不足しています。ゲームを開始できません。';
+             document.getElementById('game-message').style.color = 'red';
+             document.getElementById('decision-button').disabled = true; // ボタンを無効化
+             console.error("カードデータが不足しています。最低2枚のカードが必要です。");
+             return; // ゲーム初期化を中断
+        }
+
+        // 開始時の手札枚数設定を取得 (localStorageまたはデフォルト値)
+        const initialHandSizeInput = document.getElementById('initial-hand-size');
+        // localStorageから値を取得、なければデフォルト値(4)を使用
+        const savedHandSize = localStorage.getItem(LOCAL_STORAGE_HAND_SIZE_KEY);
+        let initialHandSize = savedHandSize ? parseInt(savedHandSize) : 4;
+
+        // 取得した値が有効な数値であることを確認し、最小1枚、最大で利用可能なカード総数から場札1枚を引いた数に制限
+        initialHandSize = Math.max(1, Math.min(initialHandSize, allCardNumbers.length - 1));
+
+        // 入力フィールドの値を更新して、実際に設定された枚数を表示
+        initialHandSizeInput.value = initialHandSize;
+        // localStorageにも設定された値を保存
+        localStorage.setItem(LOCAL_STORAGE_HAND_SIZE_KEY, initialHandSize);
+
+
+        // 初期の手札、場札の枚数を設定
+        let initialCommonSize = 1;
+
+        // 全てのカードナンバーをシャッフル
+        let shuffledCardNumbers = shuffleArray([...allCardNumbers]);
+
+        // シャッフルされたリストから、初期の手札、場札に必要な枚数を取り出す
+        handCards = shuffledCardNumbers.splice(0, initialHandSize);
+        commonCards = shuffledCardNumbers.splice(0, initialCommonSize);
+
+        // 残ったカードを山札に格納
+        deckCards = shuffledCardNumbers;
+        discardPile = []; // 捨て札は初期値空配列
+
+        console.log("初期手札:", handCards);
+        console.log("初期場札:", commonCards);
+        console.log("初期山札:", deckCards);
+        console.log("初期捨て札:", discardPile);
+
+        // 初期表示の更新
+        updateDebugPanel();
+        updateDecisionButtonState();
+        updateDeckDisplay();
+        // 画像の存在確認と表示は非同期で行う
+        updateHandDisplay();
+        updateCommonDisplay();
+        updateDiscardDisplay();
+        updateCurrentScoreDisplay();
+         console.log("initializeGame finished."); // 初期化終了ログ
+    }
+
+
+    // 配列をシャッフルする関数 (フィッシャー・イェーツアルゴリズム)
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]]; // 要素を交換
+        }
+        return array;
+    }
+
+    // 画像ファイル名ベースから、実際に存在する画像ファイルのURLを取得する関数 (非同期)
+    async function getExistingImageUrl(imageFileNameBase) {
+        if (!imageFileNameBase) {
+            console.log("getExistingImageUrl: imageFileNameBase is null or empty."); // デバッグログ
+            return null; // ファイル名ベースがない場合はnullを返す
+        }
+
+        console.log(`getExistingImageUrl: Checking for image base: ${imageFileNameBase}`); // デバッグログ
+
+        // 優先順位の高い拡張子から順に試す
+        for (const ext of IMAGE_EXTENSIONS) {
+            const fullFileName = `${imageFileNameBase}.${ext}`;
+            const url = `${IMAGE_BASE_URL}${encodeURIComponent(fullFileName)}`;
+            console.log(`getExistingImageUrl: Attempting to fetch HEAD for URL: ${url}`); // 試行するURLをログ出力
+
+            try {
+                // HEADリクエストでヘッダーだけ取得し、ファイル存在を確認
+                const response = await fetch(url, { method: 'HEAD' });
+                console.log(`getExistingImageUrl: Received response for ${url}, status: ${response.status}, ok: ${response.ok}`); // レスポンスステータスをログ出力
+
+                if (response.ok) { // ステータスコードが200-299の場合
+                    console.log(`getExistingImageUrl: Found existing image at: ${url}`); // デバッグログ
+                    return url; // 存在するURLを返す
+                }
+            } catch (error) {
+                // ネットワークエラーなどが発生した場合
+                console.warn(`getExistingImageUrl: Error checking URL ${url}:`, error); // デバッグログ
+            }
+        }
+
+        console.log(`getExistingImageUrl: No existing image found for base name: ${imageFileNameBase} with extensions ${IMAGE_EXTENSIONS.join(', ')}`); // デバッグログ
+        return null; // どの拡張子でも見つからなかった場合はnullを返す
+    }
+
+
+    // 山札の表示を更新する関数
+    function updateDeckDisplay() {
+        const deckCountElement = document.getElementById('deck-count');
+        if (deckCountElement) {
+            deckCountElement.innerText = deckCards.length;
+        }
+         updateDebugPanel(); // デバッグパネルの枚数表示を更新
+    }
+
+    // 現在の成功/失敗回数表示を更新する関数
+    function updateCurrentScoreDisplay() {
+        const currentSuccessfulElement = document.getElementById('current-successful');
+        const currentFailedElement = document.getElementById('current-failed');
+        if (currentSuccessfulElement) {
+            currentSuccessfulElement.innerText = successfulPlacements;
+        }
+        if (currentFailedElement) {
+            currentFailedElement.innerText = failedPlacements;
+        }
+    }
+
+
+    // 手札の表示を更新する関数
+    async function updateHandDisplay() {
+        console.log("updateHandDisplay started."); // ログ追加
+        const handField = document.getElementById('hand-field');
+        handField.innerHTML = ''; // 現在の手札表示をクリア
+
+        for (const cardNo of handCards) {
+            const cardHTML = createFrontCardHTML(cardNo);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = cardHTML.trim();
+            const cardContainer = tempDiv.firstChild;
+            handField.appendChild(cardContainer);
+
+            // 画像を非同期で読み込んで表示
+            const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
+            if (imageFileNameBase) {
+                 const imageUrl = await getExistingImageUrl(imageFileNameBase);
+                 const imgElement = cardContainer.querySelector('.card-image');
+                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
+                 if (imgElement) {
+                     if (imageUrl) {
+                         imgElement.src = imageUrl;
+                         imgElement.style.display = 'block'; // 画像を表示
+                         if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
+                     } else {
+                         // 画像が見つからなかった場合
+                         imgElement.style.display = 'none'; // 画像を非表示
+                         if (imagePlaceholder) {
+                              imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                              imagePlaceholder.innerText = '画像なし';
+                         }
+                     }
+                 } else if (!imageUrl && imagePlaceholder) {
+                     // 画像要素がなくPlaceholderがある場合で画像が見つからなかった
+                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                      imagePlaceholder.innerText = '画像なし';
+                 }
+            } else {
+                 // 画像ファイル名ベースがない場合
+                 const imgElement = cardContainer.querySelector('.card-image');
+                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder');
+                 if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
+                 if (imagePlaceholder) {
+                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                      imagePlaceholder.innerText = '画像ファイル名なし';
+                 }
+            }
+        }
+         updateDebugPanel(); // デバッグパネルの枚数表示を更新
+         console.log("updateHandDisplay finished."); // ログ追加
+    }
+
+    // 場札の表示を更新する関数
+    async function updateCommonDisplay() {
+         console.log("updateCommonDisplay started."); // ログ追加
+         const commonField = document.getElementById('common-field');
+         commonField.innerHTML = ''; // 現在の場札表示をクリア
+
+         for (const cardNo of commonCards) {
+             const cardHTML = createBackCardHTML(cardNo);
+             const tempDiv = document.createElement('div');
+             tempDiv.innerHTML = cardHTML.trim();
+             const cardContainer = tempDiv.firstChild;
+             commonField.appendChild(cardContainer);
+
+             // 画像を非同期で読み込んで表示
+             const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
+             if (imageFileNameBase) {
+                  const imageUrl = await getExistingImageUrl(imageFileNameBase);
+                  const imgElement = cardContainer.querySelector('.card-image');
+                  const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
+                  const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
+                  if (imgElement) {
+                      if (imageUrl) {
+                          imgElement.src = imageUrl;
+                          imgElement.style.display = 'block'; // 画像を表示
+                          if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
+                          // 画像が表示されたら日付バーを表示
+                          if (dateBar) dateBar.style.display = 'block';
+                      } else {
+                          // 画像が見つからなかった場合
+                          imgElement.style.display = 'none'; // 画像を非表示
+                          if (imagePlaceholder) {
+                               imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                               imagePlaceholder.innerText = '画像なし';
+                          }
+                           // 画像が見つからなくても日付バーは表示
+                          if (dateBar) dateBar.style.display = 'block';
+                      }
+                  } else if (!imageUrl && imagePlaceholder) {
+                      // 画像要素がなくPlaceholderがある場合で画像が見つからなかった
+                       imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                       imagePlaceholder.innerText = '画像なし';
+                       // 画像が見つからなくても日付バーは表示
+                       if (dateBar) dateBar.style.display = 'block';
+                  } else {
+                      // 画像要素もPlaceholderもない場合でも日付バーは表示
+                       if (dateBar) dateBar.style.display = 'block';
+                  }
+             } else {
+                  // 画像ファイル名ベースがない場合
+                  const imgElement = cardContainer.querySelector('.card-image');
+                  const imagePlaceholder = cardContainer.querySelector('.image-placeholder');
+                   const dateBar = cardContainer.querySelector('.date-bar');
+                  if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
+                  if (imagePlaceholder) {
+                       imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                       imagePlaceholder.innerText = '画像ファイル名なし';
+                  }
+                  // 画像ファイル名ベースがなくても日付バーは表示
+                  if (dateBar) dateBar.style.display = 'block';
+             }
+
+             // 裏面カードの左/右ボタンにイベントリスナーを設定 (非同期処理の後で)
+             const leftButton = cardContainer.querySelector('.left-button button'); // ボタン要素を取得
+             if (leftButton) {
+                 leftButton.onclick = () => handleLeftClick(leftButton.id, `${cardNo}`);
+             }
+             const rightButton = cardContainer.querySelector('.right-button button'); // ボタン要素を取得
+              if (rightButton) {
+                  rightButton.onclick = () => handleRightClick(rightButton.id, `${cardNo}`);
+              }
+         }
+          updateDebugPanel(); // デバッグパネルの枚数表示を更新
+          console.log("updateCommonDisplay finished."); // ログ追加
+    }
+
+     // 捨て札の表示を更新する関数
+    async function updateDiscardDisplay() {
+        console.log("updateDiscardDisplay started."); // ログ追加
+        const discardField = document.getElementById('discard-field');
+        discardField.innerHTML = ''; // 現在の捨て札表示をクリア
+
+        for (const cardNo of discardPile) {
+            const cardHTML = createDiscardCardHTML(cardNo);
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = cardHTML.trim();
+            const cardContainer = tempDiv.firstChild;
+            discardField.appendChild(cardContainer);
+
+            // 画像を非同期で読み込んで表示
+            const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
+            if (imageFileNameBase) {
+                 const imageUrl = await getExistingImageUrl(imageFileNameBase);
+                 const imgElement = cardContainer.querySelector('.card-image');
+                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
+                 const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
+                 if (imgElement) {
+                     if (imageUrl) {
+                         imgElement.src = imageUrl;
+                         imgElement.style.display = 'block'; // 画像を表示
+                         if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
+                         // 画像が表示されたら日付バーを表示
+                         if (dateBar) dateBar.style.display = 'block';
+                     } else {
+                         // 画像が見つからなかった場合
+                         imgElement.style.display = 'none'; // 画像を非表示
+                         if (imagePlaceholder) {
+                              imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                              imagePlaceholder.innerText = '画像なし';
+                         }
+                          // 画像が見つからなくても日付バーは表示
+                         if (dateBar) dateBar.style.display = 'block';
+                     }
+                 } else if (!imageUrl && imagePlaceholder) {
+                     // 画像要素がなくPlaceholderがある場合で画像が見つからなかった
+                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                      imagePlaceholder.innerText = '画像なし';
+                      // 画像が見つからなくても日付バーは表示
+                      if (dateBar) dateBar.style.display = 'block';
+                 } else {
+                     // 画像要素もPlaceholderもない場合でも日付バーは表示
+                      if (dateBar) dateBar.style.display = 'block';
+                 }
+            } else {
+                 // 画像ファイル名ベースがない場合
+                 const imgElement = cardContainer.querySelector('.card-image');
+                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder');
+                  const dateBar = cardContainer.querySelector('.date-bar');
+                 if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
+                 if (imagePlaceholder) {
+                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                      imagePlaceholder.innerText = '画像ファイル名なし';
+                 }
+                 // 画像ファイル名ベースがなくても日付バーは表示
+                 if (dateBar) dateBar.style.display = 'block';
+            }
+
+            // 確認ボタンにイベントリスナーを設定 (非同期処理の後で)
+            const confirmButton = cardContainer.querySelector('.discard-confirm-button button');
+            if (confirmButton) {
+                 confirmButton.onclick = () => showDiscardCardInfo(`${cardNo}`);
+            }
+        }
+         updateDebugPanel(); // デバッグパネルの枚数表示を更新
+         console.log("updateDiscardDisplay finished."); // ログ追加
+    }
+
+
+    // ゲームメッセージを表示する関数
+    function displayGameMessage(message, isSuccess) {
+        const gameMessageElement = document.getElementById('game-message');
+        if (gameMessageElement) {
+            gameMessageElement.innerText = message;
+            gameMessageElement.style.color = isSuccess ? 'green' : 'red'; // 成功なら緑、失敗なら赤
+            // 3秒後にメッセージをクリア
+            setTimeout(() => {
+                gameMessageElement.innerText = '';
+            }, 3000);
+        }
+    }
+
+    // 捨て札のカード情報を表示する関数
+    function showDiscardCardInfo(cardNo) {
+        console.log(`捨て札カード ${cardNo} の情報表示`);
+        const detail = cardDetails[cardNo];
+        // cardDetails に出来事の概要を格納するように変更したので、そこから取得
+        const eventDescription = detail?.["出来事の概要"] || "不明";
+
+        const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
+        if (cardInfoTextElement && detail) {
+            // カード情報パネルにはタイトルと出来事のみ表示
+            cardInfoTextElement.innerHTML = `
+                <strong>タイトル:</strong><br>${detail["タイトル"] || "タイトル不明"}<br>
+                <strong>出来事:</strong><br>${eventDescription}
+            `;
+        } else if (cardInfoTextElement) {
+            cardInfoTextElement.innerText = `カードNo ${cardNo} の情報が見つかりません.`;
+        }
+
+        // デバッグパネルにカード詳細を表示
+        updateDebugPanelWithCardDetails(cardNo);
+    }
+
+
+    // デバッグパネルの表示を更新する関数
+    function updateDebugPanel() {
+        // デバッグパネルが非表示の場合は更新しない
+        const debugPanel = document.getElementById('debug-panel');
+        if (debugPanel && debugPanel.style.display === 'none') {
+            return;
+        }
+
+        const debugSelectedFrontElement = document.getElementById('debug-selected-front');
+        if (debugSelectedFrontElement) {
+            debugSelectedFrontElement.innerText = `選択された表面カード: ${selectedFrontCardNo || 'なし'}`;
+        }
+        const debugSelectedBackElement = document.getElementById('debug-selected-back');
+        if (debugSelectedBackElement) {
+            debugSelectedBackElement.innerText = `選択された裏面カード: ${selectedBackCardNo || 'なし'}`;
+        }
+         const debugBackButtonElement = document.getElementById('debug-back-button');
+         if (debugBackButtonElement) {
+             debugBackButtonElement.innerText = `裏面選択ボタン: ${selectedBackCardButton || 'なし'}`;
+         }
+         const debugResultElement = document.getElementById('debug-result'); // 判定結果表示用
+         if (debugResultElement) {
+             // 決定後に判定結果を表示し、リセット時は「なし」に戻す
+             if (selectedFrontCardNo === null && selectedBackCardNo === null) {
+                  debugResultElement.innerText = `判定結果: なし`;
+             }
+         }
+         // 各フィールドの枚数を表示
+         const debugCountsElement = document.getElementById('debug-counts');
+         if (debugCountsElement) {
+             debugCountsElement.innerText = `枚数: 手札${handCards.length}, 場札${commonCards.length}, 山札${deckCards.length}, 捨て札${discardPile.length}`;
+         }
+          // 捨て札情報を表示
+          const debugDiscardInfoElement = document.getElementById('debug-discard-info'); // 変数名を修正
+          if(debugDiscardInfoElement) {
+              debugDiscardInfoElement.innerText = `捨て札情報: [${discardPile.join(', ')}]`;
+          }
+
+          // 選択されたカードの詳細をデバッグパネルに表示 (選択解除時はクリア)
+          if (selectedFrontCardNo !== null) {
+              updateDebugPanelWithCardDetails(selectedFrontCardNo);
+          } else if (selectedBackCardNo !== null) {
+               // 場札のカードが選択された場合も詳細を表示
+               updateDebugPanelWithCardDetails(selectedBackCardNo);
+          }
+           else {
+             // どちらも選択されていない場合はクリア
+             const debugCardDetailsElement = document.getElementById('debug-selected-card-details');
+             if(debugCardDetailsElement) {
+                 debugCardDetailsElement.innerText = '選択されたカード詳細: なし';
+             }
+          }
+    }
+
+    // デバッグパネルにカード詳細を表示する補助関数
+    function updateDebugPanelWithCardDetails(cardNo) {
+        // デバッグパネルが非表示の場合は更新しない
+        const debugPanel = document.getElementById('debug-panel');
+        if (debugPanel && debugPanel.style.display === 'none') {
+            return;
+        }
+
+        const debugCardDetailsElement = document.getElementById('debug-selected-card-details');
+        const detail = cardDetails[cardNo];
+         if (debugCardDetailsElement && detail) {
+             debugCardDetailsElement.innerHTML = `
+                 選択されたカード詳細:<br>
+                 No: ${cardNo}, 年: ${detail["年"] || "不明"}, 月: ${detail["月"] === null ? "不明" : detail["月"]}, 日: ${detail["日"] === null ? "不明" : detail["日"]}
+             `;
+         } else if (debugCardDetailsElement) {
+             debugCardDetailsElement.innerText = '選択されたカード詳細: 情報なし';
+         }
+    }
+
+
+    function updateDecisionButtonState() {
+        const decisionButton = document.getElementById('decision-button');
+        if (selectedFrontCardNo !== null && selectedBackCardNo !== null) {
+            decisionButton.innerText = '決定する'; // 選択条件を満たしたらテキスト変更
+            decisionButton.disabled = false; // ボタンを有効化
+        } else {
+            decisionButton.innerText = 'カードと移動先を選択して下さい'; // 初期テキスト
+            decisionButton.disabled = true; // ボタンを無効化
+        }
+    }
+
+    function updateInfoPanel(cardNo) {
+        const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
+        const detail = cardDetails[cardNo];
+        // cardDetails に出来事の概要を格納するように変更したので、そこから取得
+        const eventDescription = detail?.["出来事の概要"] || "不明";
+
+        if (cardInfoTextElement && detail) {
+             // カード情報パネルにはタイトルと出来事のみ表示
+             cardInfoTextElement.innerHTML = `
+                <strong>タイトル:</strong><br>${detail["タイトル"] || "タイトル不明"}<br>
+                <strong>出来事:</strong><br>${eventDescription}
+            `;
+        } else if (cardInfoTextElement) {
+            cardInfoTextElement.innerText = 'ここに選択したカードの情報が表示されます.'; // 情報が見つからない場合もデフォルトメッセージ
+        }
+    }
+
+    function updateInfoPanelDefault() {
+        const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
+        if (cardInfoTextElement) {
+            cardInfoTextElement.innerText = 'ここに選択したカードの情報が表示されます.';
+        }
+    }
+
+    // 手札のカードを選択/選択解除
+    function toggleSelect(buttonId, cardNo) {
+        console.log(`toggleSelect called for button ID: ${buttonId}, card No: ${cardNo}`);
+        console.log(`Before toggle: selectedFrontCardNo = ${selectedFrontCardNo}`);
+
+        const button = document.getElementById(buttonId);
+        const isSelected = button.innerText === '選択中';
+        console.log(`Button is currently selected: ${isSelected}`);
+
+        // 他の選択中の表面カードの選択を解除
+        // 手札フィールド内の全ての「選択」ボタンを取得
+        const allSelectButtons = document.querySelectorAll('#hand-field button[id^="select-button-"]');
+        allSelectButtons.forEach(btn => {
+            const btnCardNumber = btn.getAttribute('data-card-number');
+            // 現在選択中のカードと一致する場合、またはクリックされたカードと一致する場合以外をリセット
+            // ここでselectedFrontCardNoがnullでないことを確認
+            if (selectedFrontCardNo !== null && btnCardNumber === selectedFrontCardNo) {
+                 btn.innerText = '選択';
+                 console.log(`Deselecting previously selected button: ${btn.id} for card ${btnCardNumber}`);
+            }
+             // クリックされた以外のボタンで「選択中」になっているものをリセット（念のため）
+            if (btn.id !== buttonId && btn.innerText === '選択中') {
+                 btn.innerText = '選択';
+                 console.log(`Deselecting another selected button: ${btn.id} for card ${btnCardNumber}`);
+            }
+        });
+
+
+        // クリックされたカードを選択状態にする
+        if (!isSelected) {
+            button.innerText = '選択中';
+            selectedFrontCardNo = cardNo;
+            updateInfoPanel(cardNo);
+            updateDebugPanelWithCardDetails(cardNo); // デバッグパネルに詳細を表示
+             console.log(`Selected card ${cardNo}. selectedFrontCardNo is now ${selectedFrontCardNo}`);
+        } else {
+            // 同じカードがクリックされた場合は選択解除
+            button.innerText = '選択';
+            selectedFrontCardNo = null;
+            updateInfoPanelDefault();
+            updateDebugPanelWithCardDetails(null); // デバッグパネルの詳細をクリア
+             console.log(`Deselected card ${cardNo}. selectedFrontCardNo is now ${selectedFrontCardNo}`);
+        }
+
+        updateDebugPanel();
+        updateDecisionButtonState();
+    }
+
+    // 裏面カードの左ボタンがクリックされた時の処理
+    function handleLeftClick(buttonId, cardNo) {
+        console.log('裏面左ボタンがクリックされました - ボタンID', buttonId, ' カードNo', cardNo);
+
+        // 以前選択されていた裏面ボタンの表示をリセット
+        if (lastSelectedBackButtonElement) {
+             if (lastSelectedBackButtonElement.id.startsWith('left-button-')) {
+                 lastSelectedBackButtonElement.innerText = '左';
+             } else if (lastSelectedBackButtonElement.id.startsWith('right-button-')) {
+                 lastSelectedBackButtonElement.innerText = '右';
+             }
+        }
+
+        const button = document.getElementById(buttonId);
+        button.innerText = '左選択中'; // クリックされたボタンの表示を変更
+        lastSelectedBackButtonElement = button; // 選択されたボタンを記録
+
+        selectedBackCardNo = cardNo;
+        selectedBackCardButton = 'left'; // 左ボタンで選択されたことを記録
+
+        updateInfoPanel(cardNo);
+        updateDebugPanelWithCardDetails(cardNo); // デバッグパネルに詳細を表示
+        updateDebugPanel();
+        updateDecisionButtonState();
+    }
+
+    // 裏面カードの右ボタンがクリックされた時の処理
+    function handleRightClick(buttonId, cardNo) {
+        console.log('裏面右ボタンがクリックされました - ボタンID', buttonId, ' カードNo', cardNo);
+
+         // 以前選択されていた裏面ボタンの表示をリセット
+        if (lastSelectedBackButtonElement) {
+             if (lastSelectedBackButtonElement.id.startsWith('left-button-')) {
+                 lastSelectedBackButtonElement.innerText = '左';
+             } else if (lastSelectedBackButtonElement.id.startsWith('right-button-')) {
+                 lastSelectedBackButtonElement.innerText = '右';
+             }
+        }
+
+        const button = document.getElementById(buttonId);
+        button.innerText = '右選択中'; // クリックされたボタンの表示を変更
+        lastSelectedBackButtonElement = button; // 選択されたボタンを記録
+
+        selectedBackCardNo = cardNo;
+        selectedBackCardButton = 'right'; // 右ボタンで選択されたことを記録
+
+        updateInfoPanel(cardNo);
+        updateDebugPanelWithCardDetails(cardNo); // デバッグパネルに詳細を表示
+        updateDebugPanel();
+        updateDecisionButtonState();
+    }
+
+    // カードの日付を比較する関数
+    // cardNo1 が cardNo2 より古い場合は -1, 新しい場合は 1, 同じ場合は 0 を返す
+    // 月や日が不明な場合も考慮して比較する
+    function compareDates(cardNo1, cardNo2) {
+        const detail1 = cardDetails[cardNo1];
+        const detail2 = cardDetails[cardNo2];
+
+        if (!detail1 || !detail2) {
+            console.warn(`カード情報が見つかりません: ${cardNo1} または ${cardNo2}`);
+            return 0; // 情報がない場合は比較不能
+        }
+
+        // 年の比較
+        if (detail1["年"] < detail2["年"]) return -1;
+        if (detail1["年"] > detail2["年"]) return 1;
+
+        // 年が同じ場合
+        if (detail1["年"] === detail2["年"]) {
+            // 月が両方不明または同じ場合
+            if (detail1["月"] === null || detail2["月"] === null || detail1["月"] === detail2["月"]) {
+                 // 日が両方不明または同じ場合
+                 if (detail1["日"] === null || detail2["日"] === null || detail1["日"] === detail2["日"]) {
+                     return 0; // 同じ年（月日不明含む）または同じ年月日なら同じと判断
+                 }
+                 // 月は同じ（または不明）で、日だけ比較できる場合
+                 const day1 = detail1["日"] === null ? 0 : detail1["日"];
+                 const day2 = detail2["日"] === null ? 0 : detail2["日"];
+                 if (day1 < day2) return -1;
+                 if (day1 > day2) return 1;
+                 return 0; // 日も同じ
+            }
+             // 年は同じで、月だけ比較できる場合
+            const month1 = detail1["月"] === null ? 0 : detail1["月"];
+            const month2 = detail2["月"] === null ? 0 : detail2["月"];
+            if (month1 < month2) return -1;
+            if (month1 > month2) return 1;
+             return 0; // 月も同じ
+        }
+
+        // 年が異なる場合は年の比較結果を返す
+        return (detail1["年"] < detail2["年"]) ? -1 : 1;
+    }
+
+
+    // 山札からカードを引く関数
+    function drawCard() {
+        if (deckCards.length > 0) {
+            const drawnCardNo = deckCards.shift(); // 山札の先頭からカードを引く
+            console.log(`山札からカード ${drawnCardNo} を引きました。`); // デバッグログ
+            updateDeckDisplay(); // 山札の表示を更新
+            return drawnCardNo;
+        }
+        console.log("山札が空です。カードを引けません。"); // デバッグログ
+        updateDeckDisplay(); // 山札の表示を更新 (0枚になる)
+        return null; // 山札が空の場合
+    }
+
+    // 手札にカードを追加する関数
+    function addCardToHand(cardNo) {
+        handCards.push(cardNo);
+        console.log(`手札にカード ${cardNo} を追加しました。`); // デバッグログ
+        updateHandDisplay(); // 手札の表示を更新
+    }
+
+    // 捨て札にカードを追加する関数
+    function addCardToDiscard(cardNo) {
+        discardPile.push(cardNo);
+        console.log(`カード ${cardNo} を捨て札に移動しました。現在の捨て札:`, discardPile); // デバッグログ
+        updateDiscardDisplay(); // 捨て札の表示を更新
+    }
+
+    // ゲーム終了処理
+    function endGame(message) {
+        console.log("ゲーム終了:", message);
+        // 決定ボタンを無効化
+        const decisionButton = document.getElementById('decision-button');
+        if (decisionButton) {
+            decisionButton.disabled = true;
+            decisionButton.innerText = "ゲーム終了";
+        }
+
+        // ゲームメッセージを表示
+        displayGameMessage(message, true); // 終了メッセージは緑色で表示
+
+        // スコアパネルを表示
+        showScorePanel(message);
+    }
+
+    // ゲーム終了時のスコアパネルを表示する関数
+    function showScorePanel(finalMessage) {
+        const scorePanel = document.getElementById('score-panel');
+        const finalMessageElement = document.getElementById('final-message');
+        const scoreDetailsElement = document.getElementById('score-details');
+
+        if (scorePanel && finalMessageElement && scoreDetailsElement) {
+            finalMessageElement.innerText = finalMessage;
+            scoreDetailsElement.innerHTML = `成功: ${successfulPlacements} 回<br>失敗: ${failedPlacements} 回`;
+            scorePanel.style.display = 'block'; // スコアパネルを表示
+        }
+    }
+
+
+    // 決定ボタンがクリックされた時の処理
+    function handleDecision() {
+        console.log('決定ボタンがクリックされました');
+        // 決定ボタンが有効（両方のカードが選択されている）の場合のみ処理を実行
+        if (selectedFrontCardNo !== null && selectedBackCardNo !== null) {
+            console.log(`決定処理開始: 表面カード ${selectedFrontCardNo}, 裏面カード ${selectedBackCardNo}, 裏面選択ボタン: ${selectedBackCardButton}`);
+
+            const frontCardElement = document.querySelector(`#hand-field div.card-container[data-card-number="${selectedFrontCardNo}"]`);
+            const backCardElement = document.querySelector(`#common-field div.card-container.card-back-container[data-card-number="${selectedBackCardNo}"]`);
+
+            if (frontCardElement && backCardElement) {
+                // 手札からカードを削除（データのみ - 表示は後でまとめて更新）
+                const handCardIndex = handCards.indexOf(parseInt(selectedFrontCardNo));
+                if (handCardIndex > -1) {
+                    handCards.splice(handCardIndex, 1);
+                    console.log(`手札データからカード ${selectedFrontCardNo} を削除しました。`);
+                } else {
+                     console.warn(`エラー: 手札データからカード ${selectedFrontCardNo} を見つけられませんでした。`);
+                }
+
+                 // 手札のDOM要素を削除
+                 if (frontCardElement && frontCardElement.parentNode) {
+                     frontCardElement.parentNode.removeChild(frontCardElement);
+                     console.log(`手札表示からカード ${selectedFrontCardNo} を削除しました。`);
+                 } else {
+                     console.warn(`エラー: 手札表示からカード ${selectedFrontCardNo} を見つけられませんでした。`);
+                 }
+
+
+                const commonField = document.getElementById('common-field');
+                if (commonField && commonField.contains(backCardElement)) {
+                   // ターゲット位置に既存のカードがあれば削除（表面・裏面問わず）
+                   // この削除ロジックは、場札の間にカードを挿入する際に、
+                   // 以前そこに置かれたカードを置き換えるためのものです。
+                   // ゲームのルールによっては不要かもしれません。
+                   let nextElement = backCardElement.nextElementSibling;
+                   while(nextElement && !nextElement.classList.contains('card-back-container')) {
+                       const elementToRemove = nextElement;
+                       nextElement = nextElement.nextElementSibling;
+                       elementToRemove.remove();
+                   }
+                    let prevElement = backCardElement.previousElementSibling;
+                    while(prevElement && prevElement.classList && !prevElement.classList.contains('card-back-container')) { // prevElement.classList の存在を確認
+                       const elementToRemove = prevElement;
+                       prevElement = prevElement.previousElementSibling;
+                       elementToRemove.remove();
+                    }
+
+
+                   // 日付の比較判定
+                   const comparisonResult = compareDates(selectedFrontCardNo, selectedBackCardNo);
+                   let isCorrect = false;
+                   let resultText = "";
+
+                   // 新しい判定ロジック
+                   if (selectedBackCardButton === 'left') {
+                       // 左に置いた場合 (手札のカードが場札より古い、または同じと予測)
+                       if (comparisonResult === -1 || comparisonResult === 0) { // 手札のカードの方が古い、または同じ
+                           isCorrect = true;
+                           resultText = "成功！ (予測: 古い/同じ, 結果: 古い/同じ)";
+                       } else {
+                           isCorrect = false;
+                           resultText = "失敗... (予測: 古い/同じ, 結果: 新しい)";
+                       }
+                   } else if (selectedBackCardButton === 'right') {
+                       // 右に置いた場合 (手札のカードが場札より新しい、または同じと予測)
+                       if (comparisonResult === 1 || comparisonResult === 0) { // 手札のカードの方が新しい、または同じ
+                            isCorrect = true;
+                            resultText = "成功！ (予測: 新しい/同じ, 結果: 新しい/同じ)";
+                       } else {
+                           isCorrect = false;
+                           resultText = "失敗... (予測: 新しい/同じ, 結果: 古い)";
+                       }
+                   } else {
+                       console.warn("裏面選択ボタンの状態が不正です。");
+                       resultText = "エラー: 不正な選択";
+                   }
+
+                   // スコアの更新
+                   if (isCorrect) {
+                       successfulPlacements++;
+                   } else {
+                       failedPlacements++;
+                   }
+                   updateCurrentScoreDisplay(); // 現在のスコア表示を更新
+
+
+                   // 判定結果をデバッグパネルに表示
+                   const debugResultElement = document.getElementById('debug-result');
+                   if (debugResultElement) {
+                       debugResultElement.innerText = `判定結果: ${resultText}`;
+                   }
+
+                   // ゲームメッセージを表示
+                   displayGameMessage(resultText, isCorrect);
+
+
+                   if (isCorrect) {
+                       // 成功: 手札から移動するカードを裏面表示用のHTML構造に変換して場に挿入
+                       const movedCardBackHTML = createBackCardHTML(selectedFrontCardNo);
+                       const movedCardElement = new DOMParser().parseFromString(movedCardBackHTML, 'text/html').body.firstChild;
+
+                       // 裏面選択ボタンに応じてカードを挿入
+                       if (selectedBackCardButton === 'left') {
+                           backCardElement.before(movedCardElement);
+                           console.log(`成功: 共通の場のカード ${selectedFrontCardNo} を ${selectedBackCardNo} の左に移動しました。（裏面表示）`); // ログ修正
+                       } else if (selectedBackCardButton === 'right') {
+                           backCardElement.after(movedCardElement);
+                           console.log(`成功: 共通の場のカード ${selectedFrontCardNo} を ${selectedBackCardNo} の右に移動しました。（裏面表示）`); // ログ修正
+                       }
+
+                       // 共通の場のカードリストに移動したカードを追加
+                       // 挿入位置を特定
+                       const targetCardNo = parseInt(selectedBackCardNo);
+                       const targetIndexInCommon = commonCards.indexOf(targetCardNo);
+
+                       if (targetIndexInCommon > -1) {
+                           if (selectedBackCardButton === 'left') {
+                               commonCards.splice(targetIndexInCommon, 0, parseInt(selectedFrontCardNo)); // 左に挿入
+                           } else {
+                               commonCards.splice(targetIndexInCommon + 1, 0, parseInt(selectedFrontCardNo)); // 右に挿入
+                           }
+                           console.log("更新された場札データ:", commonCards);
+                           updateCommonDisplay(); // 場札の表示を更新
+                       } else {
+                           console.warn(`エラー: 場札データからターゲットカード ${selectedBackCardNo} を見つけられませんでした。`);
+                           // ターゲットカードが見つからない場合、ゲームの状態がおかしい可能性があるが、
+                           // 一旦、移動したカードを捨て札に移動させるなどのフォールバック処理も検討が必要。
+                           // 今回は警告ログのみに留める。
+                       }
+
+
+                   } else {
+                       // 失敗: 手札から移動したカードを捨て札に移動
+                       addCardToDiscard(parseInt(selectedFrontCardNo));
+                       console.log(`失敗: 手札からカード ${selectedFrontCardNo} を捨て札に移動しました。`);
+
+                       // 山札から1枚引いて手札に追加
+                       console.log("山札からカードを引く処理を開始します。");
+                       const drawnCardNo = drawCard();
+                       if (drawnCardNo !== null) {
+                           addCardToHand(drawnCardNo);
+                           console.log(`失敗: 山札からカード ${drawnCardNo} を引いて手札に追加しました。`);
+                       } else {
+                           console.log("失敗: 山札が空のためカードを引けません。");
+                           // 山札が空でカードが引けない場合はゲームオーバー
+                           endGame("ゲームオーバー！山札が空です。");
+                           return; // ゲーム終了のため以降の処理を中断
+                       }
+                   }
+
+                   // 判定結果表示後に手札の表示を更新 (失敗時にも手札が減るため)
+                   // updateHandDisplay(); // 手札のDOM要素削除時に既に更新されるため不要
+
+                   // 勝利条件のチェック
+                   if (handCards.length === 0) {
+                       endGame("ゲームクリア！手札がなくなりました！");
+                       return; // ゲーム終了のため以降の処理を中断
+                   }
+
+
+                } else {
+                   console.warn('決定ボタンがクリックされましたが、必要なカード要素が見つかりませんでした。');
+                }
+
+                resetSelectionState(); // 選択状態をリセット
+                console.log('決定処理完了。選択状態をリセットしました。');
+
+            } else {
+
+                console.warn('決定ボタンは無効です。カードと移動先を選択してください。');
+            }
+        }
+    }
+
+    // カードナンバーに基づいて表面表示用のHTMLを生成する関数
+    function createFrontCardHTML(cardNo) {
+         const detail = cardDetails[cardNo];
+         const title = detail["タイトル"] || "タイトル不明";
+
+         return `
+             <div class="card-container" style="display: flex; flex-direction: column; align-items: center; margin-right: 20px;" data-card-number="${cardNo}"> <div class="card">
+                     <div class="card-button select-button" style="top: 5px; left: 5px;">
+                       <button id="select-button-${cardNo}" style="padding: 5px; font-size: small;" data-card-number="${cardNo}" onclick="toggleSelect('select-button-${cardNo}', '${cardNo}')">選択</button>
+                     </div>
+                     <div class="card-content-area">
+                         <img src="" class="card-image" alt="Card Image" style="display: none;">
+                         <div class="image-placeholder" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: small; color: #666;">読み込み中...</div>
+                     </div>
+                     <div class="card-title-bar">${title}</div>
+                 </div>
+             </div>
+         `;
+    }
+
+
+    // カードナンバーに基づいて裏面表示用のHTMLを生成する関数 (場札用 - 左右ボタン付き)
+    function createBackCardHTML(cardNo) {
+        const detail = cardDetails[cardNo];
+        const year = detail["年"] || "不明";
+        const month = detail["月"] === null ? "不明" : detail["月"];
+        const day = detail["日"] === null ? "不明" : detail["日"];
+        const title = detail["タイトル"] || "タイトル不明";
+
+        return `
+            <div class="card-container card-back-container" style="display: flex; flex-direction: column; align-items: center; margin-right: 20px;" data-card-number="${cardNo}"> <div class="card card-back">
+                    <div class="card-button left-button" style="top: 5px; left: 5px;">
+                      <button id="left-button-${cardNo}" style="padding: 5px; font-size: small;" onclick="handleLeftClick('left-button-${cardNo}', '${cardNo}')">左</button>
+                    </div>
+                    <div class="card-button right-button" style="top: 5px; right: 5px;">
+                      <button id="right-button-${cardNo}" style="padding: 5px; font-size: small;" onclick="handleRightClick('right-button-${cardNo}', '${cardNo}')">右</button>
+                    </div>
+                    <div class="card-content-area">
+                        <img src="" class="card-image" alt="Card Image" style="display: none;">
+                        <div class="image-placeholder" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: small; color: #666;">読み込み中...</div>
+                    </div>
+                    <div class="date-bar">
+                        年: ${year}<br>月: ${month} 日: ${day}
+                    </div>
+                    <div class="card-title-bar">${title}</div>
+                 </div>
+             </div>
+         `;
+    }
+
+     // カードナンバーに基づいて裏面表示用のHTMLを生成する関数 (捨て札用 - 確認ボタン付き)
+    function createDiscardCardHTML(cardNo) {
+         const detail = cardDetails[cardNo];
+         const year = detail["年"] || "不明";
+         const month = detail["月"] === null ? "不明" : detail["月"];
+         const day = detail["日"] === null ? "不明" : detail["日"];
+         const title = detail["タイトル"] || "タイトル不明";
+
+         return `
+             <div class="card-container card-back-container" style="display: flex; flex-direction: column; align-items: center; margin-right: 20px;" data-card-number="${cardNo}"> <div class="card card-back">
+                     <div class="card-button discard-confirm-button" style="top: 5px; left: 5px;">
+                        <button onclick="showDiscardCardInfo('${cardNo}')">確認</button>
+                     </div>
+                     <div class="card-content-area">
+                         <img src="" class="card-image" alt="Card Image" style="display: none;">
+                         <div class="image-placeholder" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: small; color: #666;">読み込み中...</div>
+                     </div>
+                     <div class="date-bar">
+                         年: ${year}<br>月: ${month} 日: ${day}
+                     </div>
+                     <div class="card-title-bar">${title}</div>
+                 </div>
+             </div>
+         `;
+    }
+
+
+    // 選択状態をリセット
+    function resetSelectionState() {
+        console.log("Resetting selection state.");
+        // 手札の選択状態をリセット
+        if (selectedFrontCardNo !== null) {
+            const allSelectButtons = document.querySelectorAll('#hand-field button[id^="select-button-"]');
+              allSelectButtons.forEach(btn => {
+                  const btnCardNumber = btn.getAttribute('data-card-number');
+                   // 現在選択中のカードと一致する場合のみリセット
+                   if (btnCardNumber === selectedFrontCardNo) {
+                        btn.innerText = '選択';
+                        console.log(`Resetting button text for card ${btnCardNumber}`);
+                   }
+              });
+            selectedFrontCardNo = null;
+            console.log(`selectedFrontCardNo reset to ${selectedFrontCardNo}`);
+        }
+
+        // 裏面ボタンの表示をリセット
+        if (lastSelectedBackButtonElement) {
+             if (lastSelectedBackButtonElement.id.startsWith('left-button-')) {
+                 lastSelectedBackButtonElement.innerText = '左';
+             } else if (lastSelectedBackButtonElement.id.startsWith('right-button-')) {
+                 lastSelectedBackButtonElement.innerText = '右';
+             }
+             console.log(`Resetting back button text for ${lastSelectedBackButtonElement.id}`);
+             lastSelectedBackButtonElement = null; // 記録した要素をクリア
+        }
+
+        selectedBackCardNo = null;
+        selectedBackCardButton = null; // 裏面選択ボタンの状態もリセット
+        console.log(`selectedBackCardNo reset to ${selectedBackCardNo}, selectedBackCardButton reset to ${selectedBackCardButton}`);
+
+
+        updateInfoPanelDefault(); // カード情報パネルをデフォルトに戻す
+        updateDebugPanel(); // デバッグパネルの表示を更新 (カード詳細もクリアされる)
+        updateDecisionButtonState(); // 決定ボタンの状態を更新
+         console.log("Selection state reset complete.");
+    }
+
+    // ゲームをリスタートする関数
+    function restartGame() {
+        console.log("Restarting game...");
+        // 現在の手札枚数設定をlocalStorageに保存してから再読み込み
+        const initialHandSizeInput = document.getElementById('initial-hand-size');
+        localStorage.setItem(LOCAL_STORAGE_HAND_SIZE_KEY, initialHandSizeInput.value);
+        location.reload(); // ページを再読み込みしてゲームをリスタート
+    }
+
+    // ページ読み込み完了後にCSVを読み込み、ゲームを初期化
+    document.addEventListener('DOMContentLoaded', (event) => {
+        console.log('DOMContentLoaded event fired. Attempting to fetch CSV from:', csvUrl); // デバッグログ
+
+        fetch(csvUrl)
+            .then(response => {
+                if (!response.ok) {
+                    // レスポンスがOKでない場合、詳細なエラー情報をログに出力
+                    console.error(`HTTP error! status: ${response.status}, text: ${response.statusText}`);
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(csvText => {
+                console.log('CSV data fetched successfully.'); // デバッグログ
+                // CSVデータを解析
+                const parsedData = parseCardData(csvText);
+                 console.log('CSV data parsed:', parsedData); // デバッグログ
+
+                // カードデータが正常に解析されたか確認
+                if (Object.keys(parsedData.cardDetails).length > 0) {
+                     console.log('Initializing game...'); // デバッグログ
+                     // ゲームを初期化
+                     initializeGame(parsedData);
+                     console.log('Game initialized.'); // デバッグログ
+                } else {
+                     // カードデータが不足している場合のエラーメッセージを表示
+                     document.getElementById('game-message').innerText = 'カードデータが不足しています。ゲームを開始できません。データ形式を確認してください。';
+                     document.getElementById('game-message').style.color = 'red';
+                     document.getElementById('decision-button').disabled = true; // ボタンを無効化
+                     console.error("カードデータの解析に失敗しました。");
+                }
+            })
+            .catch(error => {
+                console.error('CSVファイルの読み込み中にエラーが発生しました:', error);
+                // エラーメッセージをユーザーに表示するなどの処理
+                document.getElementById('game-message').innerText = `カードデータの読み込みに失敗しました。エラー: ${error.message}。ファイル (${csvUrl}) が正しく配置されているか、CORSの問題がないか確認してください。`;
+                document.getElementById('game-message').style.color = 'red';
+                 document.getElementById('decision-button').disabled = true; // ボタンを無効化
+            });
+    });
+
+
+    // 手札枚数入力フィールドの値が変更されたときにlocalStorageに保存
+    document.getElementById('initial-hand-size').addEventListener('change', (event) => {
+        const newHandSize = parseInt(event.target.value);
+        // 有効な数値であることを確認してから保存
+        if (!isNaN(newHandSize) && newHandSize >= 1) {
+             localStorage.setItem(LOCAL_STORAGE_HAND_SIZE_KEY, newHandSize);
+             console.log(`手札枚数設定をlocalStorageに保存しました: ${newHandSize}`);
+        } else {
+            console.warn("不正な手札枚数入力です。保存しません。");
+        }
+    });
 
 </script>
 
