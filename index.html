@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カードゲームプレビュー（タイポ修正版）</title>
+    <title>カードゲームプレビュー</title>
     <style>
         body {
             margin: 0;
@@ -547,11 +547,11 @@
 <script>
     // CSVファイルのURLを指定
     // GitHub Pagesなどで公開しているCSVファイルのraw URLを指定してください
-    // ユーザーから提供された正しいraw URLに修正
     const csvUrl = 'https://raw.githubusercontent.com/moyamoya-toya/-my-card-game/refs/heads/main/sample.csv';
 
     // GitHub Pagesの画像ディレクトリのベースURL
-    const IMAGE_BASE_URL = 'https://moyamoya-toya.github.io/-my-card-game/image/';
+    // フォルダ名を 'image' から 'images' に修正
+    const IMAGE_BASE_URL = 'https://moyamoya-toya.github.io/-my-card-game/images/';
     // 画像ファイルの拡張子のリスト
     const IMAGE_EXTENSIONS = ['gif', 'jpeg', 'jpg', 'png'];
 
@@ -577,13 +577,21 @@
     let lastSelectedBackButtonElement = null;
 
 
-    // CSVデータからカード情報を生成する関数
+    // CSVデータからカード情報を生成する関数 (ダブルクォーテーション対応強化)
     function parseCardData(csvText) {
-        // 改行コードを正規化して分割
         const lines = csvText.trim().split(/\r\n|\n/);
-        const headers = lines[0].split(','); // ヘッダーを取得
-        const parsedCardDetails = {}; // 関数内で生成して返す
-        const parsedCardEvents = {};   // 関数内で生成して返す
+        if (lines.length === 0) {
+            console.error("CSVファイルが空です。");
+            return { cardDetails: {}, cardEvents: {} };
+        }
+
+        // ヘッダー行を解析
+        const headerLine = lines[0];
+        // ヘッダーを正規表現で分割（ダブルクォーテーション内のカンマを無視）
+        const headers = headerLine.match(/(".*?"|[^",]+)(?=,|$)/g).map(h => h.replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+        const parsedCardDetails = {};
+        const parsedCardEvents = {};
 
         // ヘッダーのインデックスを取得
         const titleIndex = headers.indexOf('カードのタイトル');
@@ -592,52 +600,63 @@
         const dayIndex = headers.indexOf('日');
         const numberIndex = headers.indexOf('カードのナンバー');
         const eventIndex = headers.indexOf('出来事の概要');
-        const imageIndex = headers.indexOf('画像ファイル名'); // 画像ファイル名ベースのインデックスも取得
+        const imageIndex = headers.indexOf('画像ファイル名');
 
         // 必要なヘッダーが存在するか確認
         if (titleIndex === -1 || yearIndex === -1 || monthIndex === -1 || dayIndex === -1 || numberIndex === -1 || eventIndex === -1 || imageIndex === -1) {
             console.error("CSVヘッダーが不正です。必要な列 (カードのタイトル, 年, 月, 日, カードのナンバー, 出来事の概要, 画像ファイル名) が存在しません。");
-            return { cardDetails: {}, cardEvents: {} }; // 空のデータを返す
+            return { cardDetails: {}, cardEvents: {} };
         }
 
-
+        // データ行を解析
         for (let i = 1; i < lines.length; i++) {
-            const values = lines[i].split(',');
-            // 列数がヘッダーと一致しない行はスキップ
-            if (values.length !== headers.length) {
+            const dataLine = lines[i];
+            // データ行を正規表現で分割（ダブルクォーテーション内のカンマを無視）
+            const values = dataLine.match(/(".*?"|[^",]+)(?=,|$)/g);
+
+             // valuesがnullまたはヘッダー数と一致しない場合はスキップ
+            if (!values || values.length !== headers.length) {
                  console.warn(`列数がヘッダーと一致しない行をスキップしました: ${lines[i]}`);
                  continue;
             }
 
-            const cardTitle = values[titleIndex];
-            // 年、月、日は数値に変換。変換できない場合はnullまたは不明扱い
-            const year = parseInt(values[yearIndex]);
-            const month = parseInt(values[monthIndex]);
-            const day = parseInt(values[dayIndex]);
-            const cardNumber = parseInt(values[numberIndex]);
-            const eventSummary = values[eventIndex];
-            const imageFileNameBase = values[imageIndex] ? values[imageIndex].trim() : null; // 画像ファイル名ベースを取得
+            // 各フィールドからダブルクォーテーションを外し、エスケープされたダブルクォーテーションを戻す
+            const cleanedValues = values.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
+
+            const cardTitle = cleanedValues[titleIndex];
+            const year = parseInt(cleanedValues[yearIndex]);
+            const month = parseInt(cleanedValues[monthIndex]);
+            const day = parseInt(cleanedValues[dayIndex]);
+            const cardNumber = parseInt(cleanedValues[numberIndex]);
+            const eventSummary = cleanedValues[eventIndex];
+            const imageFileNameBase = cleanedValues[imageIndex] ? cleanedValues[imageIndex].trim() : null;
 
             if (!isNaN(cardNumber)) { // カードナンバーが有効な数値か確認
                  parsedCardDetails[cardNumber] = {
-                     "年": isNaN(year) ? null : year, // 数値に変換できない場合はnull
+                     "年": isNaN(year) ? null : year,
                      "月": isNaN(month) ? null : month,
                      "日": isNaN(day) ? null : day,
-                     "タイトル": cardTitle || "タイトル不明", // タイトルがない場合はデフォルト値
-                     "画像ファイル名ベース": imageFileNameBase // 画像ファイル名ベースを格納
+                     "タイトル": cardTitle || "タイトル不明",
+                     "出来事の概要": eventSummary || "不明", // 出来事の概要もここに格納
+                     "画像ファイル名ベース": imageFileNameBase
                  };
-                 parsedCardEvents[cardNumber] = eventSummary || "不明"; // 出来事がない場合はデフォルト値
+                 // cardEvents は不要になるため削除または使用しない
+                 // parsedCardEvents[cardNumber] = eventSummary || "不明";
             } else {
                 console.warn(`不正なカードナンバーの行をスキップしました: ${lines[i]}`);
             }
         }
-        return { cardDetails: parsedCardDetails, cardEvents: parsedCardEvents };
+         // cardEvents は使用しないので、cardDetails のみ返すように変更
+         return { cardDetails: parsedCardDetails, cardEvents: {} }; // cardEvents は空で返す
     }
+
 
     // ゲームの初期化処理（CSV読み込み後に実行）
     function initializeGame(parsedData) {
         cardDetails = parsedData.cardDetails;
-        cardEvents = parsedData.cardEvents;
+        // cardEvents は parseCardData の修正により不要になりました
+        // cardEvents = parsedData.cardEvents;
+
         // CSVから読み込んだ全てのカードナンバーを取得
         allCardNumbers = Object.keys(cardDetails).map(Number);
 
@@ -972,8 +991,8 @@
     function showDiscardCardInfo(cardNo) {
         console.log(`捨て札カード ${cardNo} の情報表示`);
         const detail = cardDetails[cardNo];
-        // cardEvents から出来事の概要を取得し、情報がない場合は「不明」とする
-        const eventDescription = cardEvents[cardNo] || "不明";
+        // cardDetails に出来事の概要を格納するように変更したので、そこから取得
+        const eventDescription = detail?.["出来事の概要"] || "不明";
 
         const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
         if (cardInfoTextElement && detail) {
@@ -1080,8 +1099,8 @@
     function updateInfoPanel(cardNo) {
         const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
         const detail = cardDetails[cardNo];
-        // cardEvents から出来事の概要を取得し、情報がない場合は「不明」とする
-        const eventDescription = cardEvents[cardNo] || "不明";
+        // cardDetails に出来事の概要を格納するように変更したので、そこから取得
+        const eventDescription = detail?.["出来事の概要"] || "不明";
 
         if (cardInfoTextElement && detail) {
              // カード情報パネルにはタイトルと出来事のみ表示
