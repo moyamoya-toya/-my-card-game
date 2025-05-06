@@ -281,7 +281,7 @@
              font-size: small; /* 文字サイズを調整 */
              border-radius: 10px;
              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-             color: #333; /* テキストカラー */
+             color: #333; /* Text color */
          }
 
           #current-score-panel p {
@@ -429,38 +429,129 @@
 
 
 <script>
-    // cardEvents will be populated with data from the CSV
-    const cardEvents = JSON.parse('{"1": "横浜市内の小さなテナントを契約。ボードゲームプレイス創業準備を開始。", "2": "ボードゲームプレイス、プレオープン。友人や関係者向けに試遊会を実施。", "3": "ボードゲームプレイス、グランドオープン。地域住民向けのボードゲームカフェとして営業開始。", "4": "初めてのボードゲームイベント「初心者向け体験会」を開催。好評を得る。", "5": "地域情報誌に紹介記事が掲載され、新規顧客が増加。", "6": "店舗の拡張を決定。近隣のより広いテナントへの移転を計画。", "7": "新店舗へ移転リニューアルオープン。ボードゲームの品揃えを大幅に拡充。", "8": {"年": 2029, "月": 6, "日": null, "タイトル": "オンライン予約開始"}, "9": {"年": 2030, "月": 9, "日": null, "タイトル": "姉妹店ANNEX開店"}, "10": {"年": 2031, "月": 5, "日": null, "タイトル": "オリジナルゲーム発売"}, "11": {"年": 2032, "月": 11, "日": null, "タイトル": "初の大型コンベンション"}, "12": {"年": 2033, "月": 7, "日": null, "タイトル": "創業8周年"}, "13": {"年": 2034, "月": 2, "日": null, "タイトル": "オンライン通販開始"}, "14": {"年": 2035, "月": 7, "日": null, "タイトル": "創業10周年"}}');
-    console.log('cardEvents オブジェクト', cardEvents);
+    let cardDetails = {}; // CSVから読み込むため初期化
+    let cardEvents = {};   // CSVから読み込むため初期化
+    let allCardNumbers = []; // CSVから読み込むため初期化
 
-    // カードの詳細情報（裏面表示用および日付比較用）
-    const cardDetails = JSON.parse('{"1": {"年": 2025, "月": 5, "日": 15, "タイトル": "横浜で創業準備"}, "2": {"年": 2025, "月": 7, "日": 10, "タイトル": "プレオープン試遊会"}, "3": {"年": 2025, "月": 7, "日": 20, "タイトル": "グランドオープン"}, "4": {"年": 2026, "月": 3, "日": null, "タイトル": "初の初心者体験会"}, "5": {"年": 2027, "月": 1, "日": null, "タイトル": "地域誌で紹介"}, "6": {"年": 2027, "月": 12, "日": null, "タイトル": "店舗拡張を決定"}, "7": {"年": 2028, "月": 4, "日": null, "タイトル": "新店舗へ移転"}, "8": {"年": 2029, "月": 6, "日": null, "タイトル": "オンライン予約開始"}, "9": {"年": 2030, "月": 9, "日": null, "タイトル": "姉妹店ANNEX開店"}, "10": {"年": 2031, "月": 5, "日": null, "タイトル": "オリジナルゲーム発売"}, "11": {"年": 2032, "月": 11, "日": null, "タイトル": "初の大型コンベンション"}, "12": {"年": 2033, "月": 7, "日": null, "タイトル": "創業8周年"}, "13": {"年": 2034, "月": 2, "日": null, "タイトル": "オンライン通販開始"}, "14": {"年": 2035, "月": 7, "日": null, "タイトル": "創業10周年"}}');
+    let handCards = [];
+    let commonCards = [];
+    let deckCards = [];
+    let discardPile = [];
 
-    // 全てのカードナンバー
-    const allCardNumbers = Object.keys(cardDetails).map(Number);
-
-    // 初期の手札、場札、山札をランダムに設定
-    let initialHandSize = 3;
-    let initialCommonSize = 1;
-
-    // 全てのカードナンバーをシャッフル
-    let shuffledCardNumbers = shuffleArray([...allCardNumbers]);
-
-    // 初期の手札、場札、山札に分割
-    let handCards = shuffledCardNumbers.splice(0, initialHandSize);
-    let commonCards = shuffledCardNumbers.splice(0, initialCommonSize);
-    let deckCards = shuffledCardNumbers;
-    let discardPile = []; // 捨て札のカードナンバーリスト (初期値は空配列)
-
-    // スコアトラッカー
     let successfulPlacements = 0;
     let failedPlacements = 0;
 
+    let selectedFrontCardNo = null;
+    let selectedBackCardNo = null;
+    let selectedBackCardButton = null;
+    let lastSelectedBackButtonElement = null;
 
-    console.log("初期手札:", handCards);
-    console.log("初期場札:", commonCards);
-    console.log("初期山札:", deckCards);
-    console.log("初期捨て札:", discardPile);
+    // CSVデータからカード情報を生成する関数
+    function parseCardData(csvText) {
+        // 改行コードを正規化して分割
+        const lines = csvText.trim().split(/\r\n|\n/);
+        const headers = lines[0].split(','); // ヘッダーを取得
+        const parsedCardDetails = {}; // 関数内で生成して返す
+        const parsedCardEvents = {};   // 関数内で生成して返す
+
+        // ヘッダーのインデックスを取得
+        const titleIndex = headers.indexOf('カードのタイトル');
+        const yearIndex = headers.indexOf('年');
+        const monthIndex = headers.indexOf('月');
+        const dayIndex = headers.indexOf('日');
+        const numberIndex = headers.indexOf('カードのナンバー');
+        const eventIndex = headers.indexOf('出来事の概要');
+
+        // 必要なヘッダーが存在するか確認
+        if (titleIndex === -1 || yearIndex === -1 || monthIndex === -1 || dayIndex === -1 || numberIndex === -1 || eventIndex === -1) {
+            console.error("CSVヘッダーが不正です。必要な列 (カードのタイトル, 年, 月, 日, カードのナンバー, 出来事の概要) が存在しません。");
+            return { cardDetails: {}, cardEvents: {} }; // 空のデータを返す
+        }
+
+
+        for (let i = 1; i < lines.length; i++) {
+            const values = lines[i].split(',');
+            // 列数がヘッダーと一致しない行はスキップ
+            if (values.length !== headers.length) {
+                 console.warn(`列数がヘッダーと一致しない行をスキップしました: ${lines[i]}`);
+                 continue;
+            }
+
+            const cardTitle = values[titleIndex];
+            // 年、月、日は数値に変換。変換できない場合はnullまたは不明扱い
+            const year = parseInt(values[yearIndex]);
+            const month = parseInt(values[monthIndex]);
+            const day = parseInt(values[dayIndex]);
+            const cardNumber = parseInt(values[numberIndex]);
+            const eventSummary = values[eventIndex];
+
+            if (!isNaN(cardNumber)) { // カードナンバーが有効な数値か確認
+                 parsedCardDetails[cardNumber] = {
+                     "年": isNaN(year) ? null : year, // 数値に変換できない場合はnull
+                     "月": isNaN(month) ? null : month,
+                     "日": isNaN(day) ? null : day,
+                     "タイトル": cardTitle || "タイトル不明" // タイトルがない場合はデフォルト値
+                 };
+                 parsedCardEvents[cardNumber] = eventSummary || "不明"; // 出来事がない場合はデフォルト値
+            } else {
+                console.warn(`不正なカードナンバーの行をスキップしました: ${lines[i]}`);
+            }
+        }
+        return { cardDetails: parsedCardDetails, cardEvents: parsedCardEvents };
+    }
+
+    // ゲームの初期化処理（CSV読み込み後に実行）
+    function initializeGame(parsedData) {
+        cardDetails = parsedData.cardDetails;
+        cardEvents = parsedData.cardEvents;
+        // CSVから読み込んだ全てのカードナンバーを取得
+        allCardNumbers = Object.keys(cardDetails).map(Number);
+
+        // CSVから読み込んだカードが1枚以下の場合、ゲームを開始できない
+        if (allCardNumbers.length <= 1) {
+             document.getElementById('game-message').innerText = 'カードデータが不足しています。ゲームを開始できません。';
+             document.getElementById('game-message').style.color = 'red';
+             document.getElementById('decision-button').disabled = true; // ボタンを無効化
+             console.error("カードデータが不足しています。最低2枚のカードが必要です。");
+             return; // ゲーム初期化を中断
+        }
+
+
+        // 初期の手札、場札の枚数を設定
+        let initialHandSize = 3;
+        let initialCommonSize = 1;
+
+        // CSVのカード総数から手札と場札に必要な枚数を計算
+        // ただし、CSVの総数を超えないように調整
+        initialHandSize = Math.min(initialHandSize, allCardNumbers.length - initialCommonSize);
+        initialCommonSize = Math.min(initialCommonSize, allCardNumbers.length); // 場札は最低1枚必要
+
+
+        // 全てのカードナンバーをシャッフル
+        let shuffledCardNumbers = shuffleArray([...allCardNumbers]);
+
+        // シャッフルされたリストから、初期の手札、場札に必要な枚数を取り出す
+        handCards = shuffledCardNumbers.splice(0, initialHandSize);
+        commonCards = shuffledCardNumbers.splice(0, initialCommonSize);
+
+        // 残ったカードを山札に格納
+        deckCards = shuffledCardNumbers;
+        discardPile = []; // 捨て札は初期値空配列
+
+        console.log("初期手札:", handCards);
+        console.log("初期場札:", commonCards);
+        console.log("初期山札:", deckCards);
+        console.log("初期捨て札:", discardPile);
+
+        // 初期表示の更新
+        updateDebugPanel();
+        updateDecisionButtonState();
+        updateDeckDisplay();
+        updateHandDisplay();
+        updateCommonDisplay();
+        updateDiscardDisplay();
+        updateCurrentScoreDisplay();
+    }
 
 
     // 配列をシャッフルする関数 (フィッシャー・イェーツアルゴリズム)
@@ -472,11 +563,6 @@
         return array;
     }
 
-
-    let selectedFrontCardNo = null;
-    let selectedBackCardNo = null;
-    let selectedBackCardButton = null; // どのボタンで裏面カードが選択されたかを記録
-    let lastSelectedBackButtonElement = null; // 最後に選択された裏面ボタン要素を記録
 
     // 山札の表示を更新する関数
     function updateDeckDisplay() {
@@ -1157,15 +1243,42 @@
         updateDecisionButtonState(); // 決定ボタンの状態を更新
     }
 
-
+    // ページ読み込み完了後にCSVを読み込み、ゲームを初期化
     document.addEventListener('DOMContentLoaded', (event) => {
-        updateDebugPanel();
-        updateDecisionButtonState();
-        updateDeckDisplay(); // ページ読み込み時に山札表示を更新
-        updateHandDisplay(); // ページ読み込み時に手札表示を更新
-        updateCommonDisplay(); // ページ読み込み時に場札表示を更新
-        updateDiscardDisplay(); // ページ読み込み時に捨て札表示を更新
-        updateCurrentScoreDisplay(); // ページ読み込み時に現在のスコア表示を更新
+        // CSVファイルからの読み込みを有効化
+        const csvUrl = './sample.csv'; // GitHub Pages上のCSVファイルへの相対パス
+
+        fetch(csvUrl)
+            .then(response => {
+                if (!response.ok) {
+                    // レスポンスがOKでない場合、詳細なエラー情報をログに出力
+                    console.error(`HTTP error! status: ${response.status}, text: ${response.statusText}`);
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(csvText => {
+                // CSVデータを解析
+                const parsedData = parseCardData(csvText);
+                // ゲームを初期化
+                initializeGame(parsedData);
+            })
+            .catch(error => {
+                console.error('CSVファイルの読み込み中にエラーが発生しました:', error);
+                // エラーメッセージをユーザーに表示するなどの処理
+                document.getElementById('game-message').innerText = `カードデータの読み込みに失敗しました。エラー: ${error.message}。ファイル (sample.csv) がGitHub Pagesに正しく配置されているか確認してください。`;
+                document.getElementById('game-message').style.color = 'red';
+            });
+
+        // 提供されたCSVデータを直接埋め込む部分はコメントアウト
+        /*
+        const csvContent = "カードのタイトル,年,月,日,カードのナンバー,出来事の概要\r\n流派「静寂」設立の集まり,2002,4,1,1,五感を重視する癒やしの流派「静寂」が、都内からの移住者を中心に結成された。\r\n流派「疾風」高速予約システム開発,2007,9,20,2,スピードと効率を追求する流派「疾風」が、待ち時間を大幅に短縮するシステムを開発。\r\n流派「古都」伝統保存会の発足,2010,6,15,3,昔ながらのサービスと人情を重んじる人々が、「古都」流派として伝統継承を決意。\r\n流派「静寂」アロマセラピー導入,2013,7,5,4,癒やしを深めるため、香りによるリラクゼーション効果を取り入れた。";
+
+        // CSVデータを解析
+        const parsedData = parseCardData(csvContent);
+        // ゲームを初期化
+        initializeGame(parsedData);
+        */
     });
 
 
