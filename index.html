@@ -554,8 +554,7 @@
     // GitHub Pagesの画像ディレクトリのベースURL
     // フォルダ名を 'image' から 'images' に修正
     const IMAGE_BASE_URL = 'https://moyamoya-toya.github.io/-my-card-game/images/';
-    // 画像ファイルの拡張子のリスト
-    const IMAGE_EXTENSIONS = ['gif', 'jpeg', 'jpg', 'png'];
+    // 画像ファイルの拡張子はPNGのみを使用するためリストは不要
 
     // localStorageに保存する手札枚数のキー
     const LOCAL_STORAGE_HAND_SIZE_KEY = 'initialHandSize';
@@ -710,7 +709,7 @@
         updateDebugPanel();
         updateDecisionButtonState();
         updateDeckDisplay();
-        // 画像の存在確認と表示は非同期で行う
+        // 画像の表示は非同期で行う
         updateHandDisplay();
         updateCommonDisplay();
         updateDiscardDisplay();
@@ -728,38 +727,17 @@
         return array;
     }
 
-    // 画像ファイル名ベースから、実際に存在する画像ファイルのURLを取得する関数 (非同期)
-    async function getExistingImageUrl(imageFileNameBase) {
+    // 画像ファイル名ベースから、画像ファイルのURLを取得する関数 (PNG専用に簡略化)
+    function getImageUrl(imageFileNameBase) {
         if (!imageFileNameBase) {
-            console.log("getExistingImageUrl: imageFileNameBase is null or empty."); // デバッグログ
+            console.log("getImageUrl: imageFileNameBase is null or empty."); // デバッグログ
             return null; // ファイル名ベースがない場合はnullを返す
         }
-
-        console.log(`getExistingImageUrl: Checking for image base: ${imageFileNameBase}`); // デバッグログ
-
-        // 優先順位の高い拡張子から順に試す
-        for (const ext of IMAGE_EXTENSIONS) {
-            const fullFileName = `${imageFileNameBase}.${ext}`;
-            const url = `${IMAGE_BASE_URL}${encodeURIComponent(fullFileName)}`;
-            console.log(`getExistingImageUrl: Attempting to fetch HEAD for URL: ${url}`); // 試行するURLをログ出力
-
-            try {
-                // HEADリクエストでヘッダーだけ取得し、ファイル存在を確認
-                const response = await fetch(url, { method: 'HEAD' });
-                console.log(`getExistingImageUrl: Received response for ${url}, status: ${response.status}, ok: ${response.ok}`); // レスポンスステータスをログ出力
-
-                if (response.ok) { // ステータスコードが200-299の場合
-                    console.log(`getExistingImageUrl: Found existing image at: ${url}`); // デバッグログ
-                    return url; // 存在するURLを返す
-                }
-            } catch (error) {
-                // ネットワークエラーなどが発生した場合
-                console.warn(`getExistingImageUrl: Error checking URL ${url}:`, error); // デバッグログ
-            }
-        }
-
-        console.log(`getExistingImageUrl: No existing image found for base name: ${imageFileNameBase} with extensions ${IMAGE_EXTENSIONS.join(', ')}`); // デバッグログ
-        return null; // どの拡張子でも見つからなかった場合はnullを返す
+        // PNGファイルとしてURLを生成
+        const fullFileName = `${imageFileNameBase}.png`;
+        const url = `${IMAGE_BASE_URL}${encodeURIComponent(fullFileName)}`;
+        console.log(`getImageUrl: Generated URL: ${url}`); // 生成されたURLをログ出力
+        return url; // 生成したURLを返す
     }
 
 
@@ -786,7 +764,7 @@
 
 
     // 手札の表示を更新する関数
-    async function updateHandDisplay() {
+    function updateHandDisplay() {
         console.log("updateHandDisplay started."); // ログ追加
         const handField = document.getElementById('hand-field');
         handField.innerHTML = ''; // 現在の手札表示をクリア
@@ -798,38 +776,32 @@
             const cardContainer = tempDiv.firstChild;
             handField.appendChild(cardContainer);
 
-            // 画像を非同期で読み込んで表示
+            // 画像をセット
             const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
-            if (imageFileNameBase) {
-                 const imageUrl = await getExistingImageUrl(imageFileNameBase);
-                 const imgElement = cardContainer.querySelector('.card-image');
-                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
-                 if (imgElement) {
-                     if (imageUrl) {
-                         imgElement.src = imageUrl;
-                         imgElement.style.display = 'block'; // 画像を表示
-                         if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
-                     } else {
-                         // 画像が見つからなかった場合
-                         imgElement.style.display = 'none'; // 画像を非表示
-                         if (imagePlaceholder) {
-                              imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                              imagePlaceholder.innerText = '画像なし';
-                         }
-                     }
-                 } else if (!imageUrl && imagePlaceholder) {
-                     // 画像要素がなくPlaceholderがある場合で画像が見つからなかった
-                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                      imagePlaceholder.innerText = '画像なし';
-                 }
+            const imgElement = cardContainer.querySelector('.card-image');
+            const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
+
+            if (imageFileNameBase && imgElement) {
+                 const imageUrl = getImageUrl(imageFileNameBase);
+                 imgElement.src = imageUrl;
+                 imgElement.onload = () => { // 画像読み込み成功時
+                     imgElement.style.display = 'block'; // 画像を表示
+                     if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
+                 };
+                 imgElement.onerror = () => { // 画像読み込み失敗時
+                      imgElement.style.display = 'none'; // 画像を非表示
+                      if (imagePlaceholder) {
+                           imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                           imagePlaceholder.innerText = '画像なし'; // またはエラーメッセージ
+                      }
+                      console.warn(`Failed to load image for card ${cardNo} at URL: ${imageUrl}`);
+                 };
             } else {
-                 // 画像ファイル名ベースがない場合
-                 const imgElement = cardContainer.querySelector('.card-image');
-                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder');
+                 // 画像ファイル名ベースがない場合やimg要素が見つからない場合
                  if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
                  if (imagePlaceholder) {
                       imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                      imagePlaceholder.innerText = '画像ファイル名なし';
+                      imagePlaceholder.innerText = imageFileNameBase ? '画像要素なし' : '画像ファイル名なし';
                  }
             }
         }
@@ -838,7 +810,7 @@
     }
 
     // 場札の表示を更新する関数
-    async function updateCommonDisplay() {
+    function updateCommonDisplay() {
          console.log("updateCommonDisplay started."); // ログ追加
          const commonField = document.getElementById('common-field');
          commonField.innerHTML = ''; // 現在の場札表示をクリア
@@ -850,55 +822,41 @@
              const cardContainer = tempDiv.firstChild;
              commonField.appendChild(cardContainer);
 
-             // 画像を非同期で読み込んで表示
+             // 画像をセット
              const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
-             if (imageFileNameBase) {
-                  const imageUrl = await getExistingImageUrl(imageFileNameBase);
-                  const imgElement = cardContainer.querySelector('.card-image');
-                  const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
-                  const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
-                  if (imgElement) {
-                      if (imageUrl) {
-                          imgElement.src = imageUrl;
-                          imgElement.style.display = 'block'; // 画像を表示
-                          if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
-                          // 画像が表示されたら日付バーを表示
-                          if (dateBar) dateBar.style.display = 'block';
-                      } else {
-                          // 画像が見つからなかった場合
-                          imgElement.style.display = 'none'; // 画像を非表示
-                          if (imagePlaceholder) {
-                               imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                               imagePlaceholder.innerText = '画像なし';
-                          }
-                           // 画像が見つからなくても日付バーは表示
-                          if (dateBar) dateBar.style.display = 'block';
-                      }
-                  } else if (!imageUrl && imagePlaceholder) {
-                      // 画像要素がなくPlaceholderがある場合で画像が見つからなかった
-                       imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                       imagePlaceholder.innerText = '画像なし';
-                       // 画像が見つからなくても日付バーは表示
-                       if (dateBar) dateBar.style.display = 'block';
-                  } else {
-                      // 画像要素もPlaceholderもない場合でも日付バーは表示
-                       if (dateBar) dateBar.style.display = 'block';
-                  }
+             const imgElement = cardContainer.querySelector('.card-image');
+             const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
+             const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
+
+             if (imageFileNameBase && imgElement) {
+                  const imageUrl = getImageUrl(imageFileNameBase);
+                  imgElement.src = imageUrl;
+                  imgElement.onload = () => { // 画像読み込み成功時
+                      imgElement.style.display = 'block'; // 画像を表示
+                      if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
+                      if (dateBar) dateBar.style.display = 'block'; // 日付バーを表示
+                  };
+                  imgElement.onerror = () => { // 画像読み込み失敗時
+                       imgElement.style.display = 'none'; // 画像を非表示
+                       if (imagePlaceholder) {
+                            imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                            imagePlaceholder.innerText = '画像なし'; // またはエラーメッセージ
+                       }
+                       if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
+                       console.warn(`Failed to load image for card ${cardNo} at URL: ${imageUrl}`);
+                  };
              } else {
-                  // 画像ファイル名ベースがない場合
-                  const imgElement = cardContainer.querySelector('.card-image');
-                  const imagePlaceholder = cardContainer.querySelector('.image-placeholder');
-                   const dateBar = cardContainer.querySelector('.date-bar');
+                  // 画像ファイル名ベースがない場合やimg要素が見つからない場合
                   if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
                   if (imagePlaceholder) {
                        imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                       imagePlaceholder.innerText = '画像ファイル名なし';
+                       imagePlaceholder.innerText = imageFileNameBase ? '画像要素なし' : '画像ファイル名なし';
                   }
-                  // 画像ファイル名ベースがなくても日付バーは表示
-                  if (dateBar) dateBar.style.display = 'block';
+                  if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
              }
 
-             // 裏面カードの左/右ボタンにイベントリスナーを設定 (非同期処理の後で)
+
+             // 裏面カードの左/右ボタンにイベントリスナーを設定
              const leftButton = cardContainer.querySelector('.left-button button'); // ボタン要素を取得
              if (leftButton) {
                  leftButton.onclick = () => handleLeftClick(leftButton.id, `${cardNo}`);
@@ -913,7 +871,7 @@
     }
 
      // 捨て札の表示を更新する関数
-    async function updateDiscardDisplay() {
+    function updateDiscardDisplay() {
         console.log("updateDiscardDisplay started."); // ログ追加
         const discardField = document.getElementById('discard-field');
         discardField.innerHTML = ''; // 現在の捨て札表示をクリア
@@ -925,55 +883,41 @@
             const cardContainer = tempDiv.firstChild;
             discardField.appendChild(cardContainer);
 
-            // 画像を非同期で読み込んで表示
+            // 画像をセット
             const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
-            if (imageFileNameBase) {
-                 const imageUrl = await getExistingImageUrl(imageFileNameBase);
-                 const imgElement = cardContainer.querySelector('.card-image');
-                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
-                 const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
-                 if (imgElement) {
-                     if (imageUrl) {
-                         imgElement.src = imageUrl;
-                         imgElement.style.display = 'block'; // 画像を表示
-                         if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
-                         // 画像が表示されたら日付バーを表示
-                         if (dateBar) dateBar.style.display = 'block';
-                     } else {
-                         // 画像が見つからなかった場合
-                         imgElement.style.display = 'none'; // 画像を非表示
-                         if (imagePlaceholder) {
-                              imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                              imagePlaceholder.innerText = '画像なし';
-                         }
-                          // 画像が見つからなくても日付バーは表示
-                         if (dateBar) dateBar.style.display = 'block';
-                     }
-                 } else if (!imageUrl && imagePlaceholder) {
-                     // 画像要素がなくPlaceholderがある場合で画像が見つからなかった
-                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                      imagePlaceholder.innerText = '画像なし';
-                      // 画像が見つからなくても日付バーは表示
-                      if (dateBar) dateBar.style.display = 'block';
-                 } else {
-                     // 画像要素もPlaceholderもない場合でも日付バーは表示
-                      if (dateBar) dateBar.style.display = 'block';
-                 }
+            const imgElement = cardContainer.querySelector('.card-image');
+            const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
+            const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
+
+            if (imageFileNameBase && imgElement) {
+                 const imageUrl = getImageUrl(imageFileNameBase);
+                 imgElement.src = imageUrl;
+                 imgElement.onload = () => { // 画像読み込み成功時
+                     imgElement.style.display = 'block'; // 画像を表示
+                     if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
+                     if (dateBar) dateBar.style.display = 'block'; // 日付バーを表示
+                 };
+                 imgElement.onerror = () => { // 画像読み込み失敗時
+                      imgElement.style.display = 'none'; // 画像を非表示
+                      if (imagePlaceholder) {
+                           imagePlaceholder.style.display = 'flex'; // Placeholderを表示
+                           imagePlaceholder.innerText = '画像なし'; // またはエラーメッセージ
+                      }
+                      if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
+                      console.warn(`Failed to load image for card ${cardNo} at URL: ${imageUrl}`);
+                 };
             } else {
-                 // 画像ファイル名ベースがない場合
-                 const imgElement = cardContainer.querySelector('.card-image');
-                 const imagePlaceholder = cardContainer.querySelector('.image-placeholder');
-                  const dateBar = cardContainer.querySelector('.date-bar');
+                 // 画像ファイル名ベースがない場合やimg要素が見つからない場合
                  if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
                  if (imagePlaceholder) {
                       imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                      imagePlaceholder.innerText = '画像ファイル名なし';
+                      imagePlaceholder.innerText = imageFileNameBase ? '画像要素なし' : '画像ファイル名なし';
                  }
-                 // 画像ファイル名ベースがなくても日付バーは表示
-                 if (dateBar) dateBar.style.display = 'block';
+                 if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
             }
 
-            // 確認ボタンにイベントリスナーを設定 (非同期処理の後で)
+
+            // 確認ボタンにイベントリスナーを設定
             const confirmButton = cardContainer.querySelector('.discard-confirm-button button');
             if (confirmButton) {
                  confirmButton.onclick = () => showDiscardCardInfo(`${cardNo}`);
