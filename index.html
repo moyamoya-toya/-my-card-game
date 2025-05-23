@@ -3,1854 +3,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カードゲームプレビュー</title>
+    <title>アグリコラ カードリスト</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
-            margin: 0;
-            padding: 20px; /* コンテンツ全体に余白 */
-            background-color: #e0f2f7; /* 明るい水色系の背景 */
-            font-family: sans-serif;
-            color: #333; /* 基本的なテキストカラー */
-            /* リスタートボタンとカード情報パネルの領域を確保 */
-            padding-bottom: 150px; /* 必要に応じて調整 */
+            font-family: 'Inter', sans-serif;
         }
-
-        /* カードコンテナにホバーエフェクトを追加 */
-        .card-container:hover .card {
-            transform: translateY(-5px);
-            transition: transform 0.2s ease-in-out;
+        /* 各テーブルコンテナのスクロールを有効にするためのスタイル */
+        .table-container-scrollable {
+            max-height: 400px; /* 必要に応じて高さを調整してください */
+            overflow-y: auto;
+            border-radius: 0.5rem; /* rounded-lg */
+            border: 1px solid #e5e7eb; /* gray-200 */
         }
-        .card {
-            transition: transform 0.2s ease-in-out; /* ホバー解除時のアニメーション */
-            background-color: #ffffff; /* カードの背景は白 */
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2); /* より立体的な影 */
-            position: relative; /* 画像やタイトル、ボタンの配置のために必要 */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start; /* 上から要素を配置 */
-            width: 150px; /* カードの幅を固定 */
-            height: 220px; /* カードの高さを固定 */
+        /* テーブルヘッダーがスクロールしても固定されるようにする */
+        .table-container-scrollable thead th {
+            position: sticky;
+            top: 0;
+            background-color: #f9fafb; /* bg-gray-50 */
+            z-index: 10;
         }
-
-        /* カードが場札に登場する際のアニメーション初期状態 */
-        .card-entering {
-            opacity: 0;
-            transform: scale(0.5); /* 開始時は小さく */
+        /* 効果のセル内のテキストが折り返されるようにする */
+        .wrap-text {
+            white-space: normal;
         }
-
-        /* カードコンテナのトランジション設定 */
-        /* opacity, transform に加えて、場札での位置変化（margin）もアニメーション対象に */
-        .card-container {
-            /* マージンのトランジション時間を少し長く調整 */
-            transition: opacity 0.5s ease-out, transform 0.5s ease-out, margin-left 0.8s ease-out, margin-right 0.8s ease-out;
-        }
-
-
-        /* カードコンテンツ（画像または裏面情報）エリア */
-        .card-content-area {
-            width: 100%;
-            height: calc(100% - 30px); /* タイトルバー分の高さを引く */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 10px;
-            box-sizing: border-box; /* paddingをwidth/heightに含める */
-            position: relative; /* 日付情報を重ねるために必要 */
-        }
-
-        /* カード画像スタイル */
-        .card-image {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain; /* アスペクト比を維持して表示 */
-            opacity: 0; /* 初期状態では透明 */
-            transition: opacity 0.3s ease-in-out; /* フェードインアニメーション */
-        }
-
-        /* 裏面カードの日付情報オーバーレイ */
-        /* このスタイルは使われなくなりますが、念のため残しておきます */
-        /* .card-back .date-overlay { ... } */
-
-
-        /* カードタイトルバーのスタイル */
-        .card-title-bar {
-             position: absolute;
-             bottom: 0;
-             left: 0;
-             width: 100%;
-             background-color: rgba(0, 0, 0, 0.7);
-             color: white;
-             font-size: small;
-             text-align: center;
-             padding: 5px 0;
-             box-sizing: border-box;
-        }
-
-        /* 裏面カードの年月日表示バーのスタイル */
-        .date-bar {
-            position: absolute;
-            bottom: 50px; /* タイトルバーの上に配置 - 高さを調整 */
-            left: 0;
-            width: 100%;
-            background-color: rgba(0, 0, 0, 0.6); /* タイトルバーより少し薄い半透明の黒 */
-            color: white;
-            font-size: medium; /* タイトルより少し大きく */
-            font-weight: bold;
-            text-align: center;
-            padding: 5px 0;
-            box-sizing: border-box;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.7); /* 影を追加して見やすく */
-            z-index: 5; /* タイトルバーより上、ボタンより下 */
-        }
-
-
-        /* カード上のボタン（選択、左右、確認）のスタイル */
-        .card-button {
-             position: absolute;
-             padding: 5px;
-             font-size: small;
-             z-index: 10; /* 他の要素より前面に表示 */
-             white-space: nowrap; /* ボタン内のテキストを折り返さない */
-             border: none;
-             border-radius: 3px;
-             cursor: pointer;
-             box-shadow: 0 1px 2px rgba(0,0,0,0.2);
-             transition: background-color 0.3s ease;
-        }
-
-        .select-button {
-            top: 5px;
-            left: 5px;
-            background-color: #2196f3; /* 青系 */
-            color: white;
-        }
-        .select-button:hover {
-            background-color: #1976d2; /* 濃い青系 */
-        }
-        .select-button:active {
-            background-color: #0d47a1; /* さらに濃い青系 */
-        }
-
-        /* 左ボタンのスタイル - 緑に変更 */
-        .left-button {
-            top: 5px;
-            left: 5px;
-            background-color: #4CAF50; /* 緑系 */
-            color: white;
-        }
-        .left-button:hover {
-            background-color: #388E3C; /* 濃い緑系 */
-        }
-         .left-button:active {
-             background-color: #1B5E20; /* さらに濃い緑系 */
-         }
-
-        /* 右ボタンのスタイル - 緑に変更 */
-        .right-button {
-            top: 5px;
-            right: 5px;
-            background-color: #4CAF50; /* 緑系 */
-            color: white;
-        }
-         .right-button:hover {
-             background-color: #388E3C; /* 濃い緑系 */
-         }
-          .right-button:active {
-              background-color: #1B5E20; /* さらに濃い緑系 */
-          }
-
-        /* 捨て札確認ボタンのスタイル - 緑に変更 */
-        .discard-confirm-button {
-             top: 5px; /* 上からの位置を調整 */
-             left: 5px; /* 左からの位置を調整 */
-             background-color: #81C784; /* ボタンの色 - 薄い緑系 */
-             color: white;
-        }
-         .discard-confirm-button:hover {
-              background-color: #66BB6A; /* ホバー時の色 */
-          }
-         .discard-confirm-button:active {
-             background-color: #4CAF50; /* さらに濃い緑系 */
-         }
-
-
-        /* スクロールバーのスタイルを調整 (任意) */
-        #hand-field::-webkit-scrollbar,
-        #common-field::-webkit-scrollbar,
-        #discard-field::-webkit-scrollbar { /* 捨て札フィールドを追加 */
-            height: 8px;
-        }
-
-        #hand-field::-webkit-scrollbar-track,
-        #common-field::-webkit-scrollbar-track,
-        #discard-field::-webkit-scrollbar-track { /* 捨て札フィールドを追加 */
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-
-        #hand-field::-webkit-scrollbar-thumb,
-        #common-field::-webkit-scrollbar-thumb,
-        #discard-field::-webkit-scrollbar-thumb { /* 捨て札フィールドを追加 */
-            background: #888;
-            border-radius: 10px;
-        }
-
-        #hand-field::-webkit-scrollbar-thumb:hover,
-        #common-field::-webkit-scrollbar-thumb:hover,
-        #discard-field::-webkit-scrollbar-thumb:hover { /* 捨て札フィールドを追加 */
-            background: #555;
-        }
-
-         /* 捨て札フィールドのスタイル */
-        #discard-field {
-            background-color: #b2dfdb; /* 場札と同じ薄いティール系のマットな色 */
-            width: 100%; /* 親要素の幅いっぱいに */
-            height: 250px;
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            padding: 10px;
-            overflow-x: auto; /* 横方向のスクロールを有効に */
-            margin-bottom: 20px;
-            border-radius: 10px;
-            border: none; /* ボーダーを削除 */
-        }
-
-        /* 手札フィールドのスタイル */
-        #hand-field {
-            background-color: #bbdefb; /* 薄い青系のマットな色 */
-            width: 100%;
-            height: 250px;
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            padding: 10px;
-            overflow-x: auto;
-            margin-bottom: 20px;
-            border-radius: 10px;
-        }
-
-        /* 場札フィールドのスタイル */
-        #common-field {
-            background-color: #b2dfdb; /* 薄いティール系のマットな色 */
-            width: 100%;
-            height: 250px;
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            padding: 10px;
-            overflow-x: auto;
-            margin-bottom: 20px;
-            border-radius: 10px;
-        }
-
-
-        /* ボタンコンテナのスタイル */
-        #button-container {
-            margin-bottom: 10px; /* 手札枚数設定エリアとの間に余白 */
-            display: flex; /* Flexboxを使用 */
-            align-items: center; /* 垂直方向中央揃え */
-            justify-content: center; /* 水平方向中央揃え */
-            width: 100%; /* 親要素の幅いっぱいに */
-        }
-
-         #decision-button { /* 決定ボタンのスタイル */
-            padding: 10px 20px;
-            font-size: large;
-            margin: 0 10px; /* ボタン間の余白 */
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            transition: background-color 0.3s ease;
-            background-color: #26a69a; /* 決定ボタンの色 - ティール系 */
-            color: black; /* 文字色を黒に変更 */
-         }
-
-         #decision-button:disabled {
-             background-color: #b2dfdb; /* 無効時の色 */
-             cursor: not-allowed;
-         }
-
-         #decision-button:hover:not(:disabled) {
-             background-color: #00897b; /* ホバー時の色 */
-         }
-
-         /* 固定パネルをまとめるコンテナのスタイル */
-         #bottom-fixed-panels {
-             position: fixed; /* 画面下部に固定 */
-             bottom: 0; /* 下からの距離 */
-             left: 0;
-             width: 100%;
-             display: flex;
-             flex-direction: column; /* 縦に並べる */
-             align-items: center; /* 中央揃え */
-             z-index: 100; /* 他の要素より前面に */
-             padding: 10px 20px; /* 内側の余白 */
-             box-sizing: border-box; /* paddingを幅に含める */
-             background-color: rgba(224, 242, 247, 0.9); /* 背景色（透過） */
-             box-shadow: 0 -2px 5px rgba(0,0,0,0.1); /* 上部に影 */
-         }
-
-
-         #restart-button-container { /* リスタートボタンコンテナのスタイル */
-             width: 100%; /* 親要素の幅いっぱいに */
-             display: flex;
-             justify-content: center; /* 水平方向中央揃え */
-             margin-bottom: 10px; /* カード情報パネルとの間に余白 */
-         }
-
-         #restart-button { /* リスタートボタンのスタイル */
-             padding: 10px 20px;
-             font-size: large;
-             border: none;
-             border-radius: 5px;
-             cursor: pointer;
-             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-             transition: background-color 0.3s ease;
-             background-color: #ff9800; /* リスタートボタンの色 - オレンジ系 */
-             color: white;
-         }
-
-         #restart-button:hover {
-             background-color: #f57c00; /* ホバー時の色 */
-         }
-
-
-         /* ゲームメッセージ表示エリアのスタイル */
-         #game-message {
-             font-size: large;
-             font-weight: bold;
-             color: #1976d2; /* デフォルトの色 - 青系 */
-             margin-left: 20px; /* ボタンとの間に余白 */
-         }
-
-         /* メインコンテンツコンテナのスタイル */
-         #main-content-container {
-             display: flex;
-             /* スマートフォン表示時にも対応するため、折り返しを許可 */
-             flex-wrap: wrap;
-         }
-
-         /* ゲームフィールドコンテナのスタイル */
-         #game-fields-container {
-             display: flex;
-             flex-direction: column;
-             margin-right: 20px;
-             flex-grow: 1; /* 残りのスペースを埋める */
-             /* スマートフォン表示時に幅を調整 */
-             width: calc(100% - 430px); /* 情報パネルの幅(410px) + 余白(20px) を引く */
-             min-width: 300px; /* 最小幅を設定して極端に小さくならないように */
-         }
-
-         /* 情報・デバッグパネルコンテナのスタイル */
-         #info-debug-panels {
-             display: flex;
-             flex-direction: column; /* パネルを縦に並べる */
-             width: 410px; /* レイアウトに合わせて調整 */
-             position: fixed; /* 固定位置 */
-             top: 20px; /* 上からの位置 */
-             right: 20px; /* 右からの位置 */
-             /* スマートフォン表示時に位置を調整する場合はメディアクエリで変更 */
-         }
-
-         /* 上部右側コンテンツコンテナのスタイル (山札残り+スコア と カード情報) */
-         /* カード情報パネルを移動したので、レイアウトを調整 */
-         #top-right-content {
-             display: flex;
-             flex-direction: row; /* 横に並べる */
-             align-items: flex-start; /* 上揃え */
-             margin-bottom: 20px; /* デバッグパネルとの間に余白 */
-             gap: 10px; /* パネル間の隙間を定義 */
-             width: 100%; /* 親要素の幅いっぱいに */
-         }
-
-         /* スコア情報をまとめる新しいパネルのスタイル */
-         #score-info-panel {
-             width: 150px; /* 幅を調整 */
-             border: 1px solid #a5d6a7; /* 薄い緑色のボーダー */
-             padding: 10px;
-             background-color: #e8f5e9; /* 薄い緑色の背景 */
-             font-size: small;
-             border-radius: 10px;
-             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-             color: #333;
-             flex-shrink: 0; /* 縮まないように設定 */
-         }
-
-          #score-info-panel p {
-              margin: 2px 0; /* 各行の上下の余白を調整 */
-          }
-
-
-         /* 情報パネルのスタイル */
-         #card-info-panel {
-             /* 固定位置になったため、幅を調整 */
-             width: calc(100% - 40px); /* padding 20px * 2 を引く */
-             border: 1px solid #ccc; /* 薄いグレーのボーダー */
-             padding: 10px;
-             background-color: #ffffff; /* 白背景 */
-             border-radius: 10px;
-             color: #333; /* テキストカラー */
-             box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* 控えめな影 */
-             /* flex-grow: 1; */ /* 固定位置になったため不要 */
-
-             /* 固定位置のスタイル */
-             /* position: fixed; */ /* bottom-fixed-panelsでまとめて固定 */
-             /* bottom: 20px; */ /* bottom-fixed-panelsでまとめて固定 */
-             /* left: 20px; */ /* bottom-fixed-panelsでまとめて固定 */
-             /* right: 20px; */ /* bottom-fixed-panelsでまとめて固定 */
-             /* z-index: 100; */ /* bottom-fixed-panelsでまとめて固定 */
-         }
-
-         /* デバッグパネルのスタイル */
-         #debug-panel {
-             width: 390px; /* 親要素の幅に合わせて調整 (410 - 10*2) */
-             border: 1px solid #fbc02d; /* 黄色系のボーダー */
-             padding: 10px;
-             background-color: #fff9c4; /* 薄い黄色系の背景 */
-             font-size: small;
-             border-radius: 10px;
-             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-             display: none; /* デバッグパネルを非表示にする */
-             color: #333; /* テキストカラー */
-         }
-
-         /* ゲーム終了時のスコア情報パネルのスタイル */
-        #score-panel {
-            width: 390px; /* 親要素の幅に合わせて調整 */
-            border: 1px solid #64b5f6; /* 青系のボーダー */
-            padding: 10px;
-            margin-top: 20px; /* デバッグパネルとの間に余白 */
-            background-color: #e3f2fd; /* 薄い青系の背景 */
-            font-size: medium;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            display: none; /* 初期状態では非表示 */
-            color: #333; /* テキストカラー */
-        }
-
-        /* 手札枚数設定エリアのスタイル */
-        #initial-hand-size-setting {
-            margin-bottom: 10px; /* ボタンコンテナとの間に余白 */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: small;
-        }
-
-        #initial-hand-size-setting label {
-            margin-right: 5px;
-        }
-
-        #initial-hand-size-setting input[type="number"] {
-            width: 50px; /* 入力フィールドの幅を調整 */
-            padding: 3px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            font-size: small;
-        }
-
-
-        /* スマートフォン表示用のメディアクエリ */
-        @media (max-width: 768px) {
-            body {
-                 padding-bottom: 200px; /* スマートフォン表示時の下部パディングを調整 */
-            }
-
-            #main-content-container {
-                flex-direction: column; /* 縦並びに変更 */
-            }
-
-            #game-fields-container {
-                margin-right: 0; /* 右側の余白をなくす */
-                width: 100%; /* 幅を100%に */
-                min-width: auto; /* 最小幅を解除 */
-            }
-
-            #info-debug-panels {
-                position: static; /* 固定を解除して通常フローに */
-                width: 100%; /* 幅を100%に */
-                margin-top: 20px; /* ゲームフィールドとの間に余白 */
-                right: auto; /* 右からの位置指定を解除 */
-                left: auto; /* 左からの位置指定を解除 */
-            }
-
-            #debug-panel, #score-panel {
-                 width: calc(100% - 20px); /* 親要素の幅に合わせて調整 (padding 10*2 を引く) */
-            }
-
-             #top-right-content {
-                 flex-direction: column; /* 山札残り+スコア と カード情報を縦に並べる */
-                 align-items: center; /* 中央揃え */
-                 gap: 0; /* 縦並びの際はgapをなくす */
-             }
-
-             #score-info-panel { /* スコア情報パネル */
-                 width: calc(100% - 20px); /* 親要素の幅に合わせて調整 (padding 10*2 を引く) */
-                 margin-bottom: 10px; /* カード情報パネルとの間に余白 */
-             }
-
-
-             #card-info-panel {
-                 /* スマートフォン表示時も固定位置 */
-                 width: calc(100% - 40px); /* padding 20px * 2 を引く */
-                 /* position: fixed; */ /* bottom-fixed-panelsでまとめて固定 */
-                 /* bottom: 10px; */ /* bottom-fixed-panelsでまとめて固定 */
-                 /* left: 10px; */ /* bottom-fixed-panelsでまとめて固定 */
-                 /* right: 10px; */ /* bottom-fixed-panelsでまとめて固定 */
-             }
-
-              #button-container { /* 決定ボタンのコンテナ */
-                  flex-direction: column; /* 縦並びに変更 */
-              }
-
-              #decision-button { /* 決定ボタン */
-                  margin: 5px 0; /* ボタン間の上下余白 */
-              }
-
-              #game-message { /* ゲームメッセージ */
-                  margin-left: 0; /* 左側の余白をなくす */
-                  margin-top: 10px; /* ボタンとの間に余白 */
-              }
-
-               #initial-hand-size-setting { /* 手札枚数設定エリア */
-                  justify-content: center; /* 中央揃え */
-               }
-
-               /* スマートフォン表示時のリスタートボタン位置調整 */
-               /* bottom-fixed-panelsでまとめて固定 */
-               /* #restart-button-container {
-                   bottom: 10px;
-               } */
-        }
-
     </style>
 </head>
-<body>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-7xl">
+        <h1 class="text-4xl font-bold text-gray-800 mb-6 text-center">アグリコラ 全カードリスト</h1>
 
-<div id="initial-hand-size-setting">
-    <label for="initial-hand-size">開始時の手札枚数:</label>
-    <input type="number" id="initial-hand-size" value="4" min="1">
-</div>
-
-<div id="button-container">
-    <button id="decision-button" onclick="handleDecision()">カードと移動先を選択して下さい</button>
-    <div id="game-message"></div>
-</div>
-
-<div id="main-content-container">
-    <div id="game-fields-container">
-        <div class="field-label">手札</div>
-        <div id="hand-field" style="background-color: #bbdefb; width: 100%; height: 250px; display: flex; flex-direction: row; align-items: center; padding: 10px; overflow-x: auto; margin-bottom: 20px; border-radius: 10px;">
+        <div class="flex flex-col md:flex-row gap-8">
+            <div class="card-section flex-1">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4 text-center">小進歩カード</h2>
+                <div class="table-container-scrollable shadow-sm">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">効果</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価点</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">種類</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価</th>
+                            </tr>
+                        </thead>
+                        <tbody id="small-improvement-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                </div>
             </div>
 
-        <div class="field-label">場札</div>
-        <div id="common-field" style="background-color: #b2dfdb; width: 100%; height: 250px; display: flex; flex-direction: row; align-items: center; padding: 10px; overflow-x: auto; margin-bottom: 20px; border-radius: 10px;">
+            <div class="card-section flex-1">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4 text-center">職業カード</h2>
+                <div class="table-container-scrollable shadow-sm">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">効果</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価点</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">種類</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">評価</th>
+                            </tr>
+                        </thead>
+                        <tbody id="job-card-body" class="bg-white divide-y divide-gray-200">
+                            </tbody>
+                    </table>
+                </div>
             </div>
-
-        <div class="field-label">捨て札</div>
-        <div id="discard-field" style="background-color: #b2dfdb; width: 100%; height: 250px; display: flex; flex-direction: row; align-items: center; padding: 10px; overflow-x: auto; margin-bottom: 20px; border-radius: 10px; border: none;">
-            </div>
-
-    </div>
-
-    <div id="info-debug-panels">
-        <div id="top-right-content">
-            <div id="score-info-panel">
-                 <p>山札残り: <span id="deck-count"></span>枚</p>
-                 <p>成功: <span id="current-successful">0</span> 回</p>
-                 <p>失敗: <span id="current-failed">0</span> 回</p>
-            </div>
-            </div>
-
-        <div id="debug-panel">
-            <h3 style="margin-top: 0;">デバッグ情報</h3>
-            <p id="debug-selected-card-details">選択されたカード詳細: なし</p>
-            <p id="debug-selected-front">選択された表面カード: なし</p>
-            <p id="debug-selected-back">選択された裏面カード: なし</p>
-            <p id="debug-back-button">裏面選択ボタン: なし</p>
-            <p id="debug-result">判定結果: なし</p>
-            <p id="debug-discard-info">捨て札情報: なし</p>
-            <p id="debug-counts">枚数: 手札-, 場札-, 山札-, 捨て札-</p>
-        </div>
-
-        <div id="score-panel">
-            <h3 style="margin-top: 0;">ゲーム結果</h3>
-            <p id="final-message"></p>
-            <p id="score-details"></p>
         </div>
     </div>
-</div>
 
-<div id="bottom-fixed-panels">
-    <div id="restart-button-container">
-        <button id="restart-button" onclick="restartGame()">リスタート</button>
-    </div>
-    <div id="card-info-panel">
-        <h3 style="color: black; margin-top: 0;">カード情報</h3>
-        <p id="card-info-text">ここに選択したカードの情報が表示されます.</p>
-    </div>
-</div>
-
-
-<script>
-    console.log("Script execution started."); // JavaScriptが実行されたか確認するためのログ
-
-    // CSVファイルのURLを指定
-    // GitHub Pagesなどで公開しているCSVファイルのraw URLを指定してください
-    const csvUrl = 'https://raw.githubusercontent.com/moyamoya-toya/-my-card-game/refs/heads/main/sample.csv';
-
-    // GitHub Pagesの画像ディレクトリのベースURL
-    // フォルダ名を 'image' から 'images' に修正
-    const IMAGE_BASE_URL = 'https://moyamoya-toya.github.io/-my-card-game/images/';
-    // 画像ファイルの拡張子はPNGのみを使用するためリストは不要
-
-    // localStorageに保存する手札枚数のキー
-    const LOCAL_STORAGE_HAND_SIZE_KEY = 'initialHandSize';
-
-
-    let cardDetails = {}; // CSVから読み込むため初期化
-    let cardEvents = {};   // CSVから読み込むため初期化
-    let allCardNumbers = []; // CSVから読み込むため初期化
-
-    let handCards = [];
-    let commonCards = [];
-    let deckCards = [];
-    let discardPile = [];
-
-    let successfulPlacements = 0;
-    let failedPlacements = 0;
-
-    let selectedFrontCardNo = null;
-    let selectedBackCardNo = null;
-    let selectedBackCardButton = null;
-    let lastSelectedBackButtonElement = null;
-
-
-    // CSVデータからカード情報を生成する関数 (ダブルクォーテーション対応強化)
-    function parseCardData(csvText) {
-        const lines = csvText.trim().split(/\r\n|\n/);
-        if (lines.length === 0) {
-            console.error("CSVファイルが空です。");
-            return { cardDetails: {}, cardEvents: {} };
-        }
-
-        // ヘッダー行を解析
-        const headerLine = lines[0];
-        // ヘッダーを正規表現で分割（ダブルクォーテーション内のカンマを無視）
-        const headers = headerLine.match(/(".*?"|[^",]+)(?=,|$)/g).map(h => h.replace(/^"|"$/g, '').replace(/""/g, '"'));
-
-        const parsedCardDetails = {};
-        const parsedCardEvents = {};
-
-        // ヘッダーのインデックスを取得
-        const titleIndex = headers.indexOf('カードのタイトル');
-        const yearIndex = headers.indexOf('年');
-        const monthIndex = headers.indexOf('月');
-        const dayIndex = headers.indexOf('日');
-        const numberIndex = headers.indexOf('カードのナンバー');
-        const eventIndex = headers.indexOf('出来事の概要');
-        const imageIndex = headers.indexOf('画像ファイル名');
-
-        // 必要なヘッダーが存在するか確認
-        if (titleIndex === -1 || yearIndex === -1 || monthIndex === -1 || dayIndex === -1 || numberIndex === -1 || eventIndex === -1 || imageIndex === -1) {
-            console.error("CSVヘッダーが不正です。必要な列 (カードのタイトル, 年, 月, 日, カードのナンバー, 出来事の概要, 画像ファイル名) が存在しません。");
-            return { cardDetails: {}, cardEvents: {} };
-        }
-
-        // データ行を解析
-        for (let i = 1; i < lines.length; i++) {
-            const dataLine = lines[i];
-            // データ行を正規表現で分割（ダブルクォーテーション内のカンマを無視）
-            const values = dataLine.match(/(".*?"|[^",]+)(?=,|$)/g);
-
-             // valuesがnullまたはヘッダー数と一致しない場合はスキップ
-            if (!values || values.length !== headers.length) {
-                 console.warn(`列数がヘッダーと一致しない行をスキップしました: ${lines[i]}`);
-                 continue;
-            }
-
-            // 各フィールドからダブルクォーテーションを外し、エスケープされたダブルクォーテーションを戻す
-            const cleanedValues = values.map(v => v.replace(/^"|"$/g, '').replace(/""/g, '"'));
-
-            const cardTitle = cleanedValues[titleIndex];
-            // 月と日が空文字列の場合はnullとして扱う
-            const year = parseInt(cleanedValues[yearIndex]);
-            const month = cleanedValues[monthIndex].trim() === '' ? null : parseInt(cleanedValues[monthIndex]);
-            const day = cleanedValues[dayIndex].trim() === '' ? null : parseInt(cleanedValues[dayIndex]);
-            const cardNumber = parseInt(cleanedValues[numberIndex]);
-            const eventSummary = cleanedValues[eventIndex];
-            const imageFileNameBase = cleanedValues[imageIndex] ? cleanedValues[imageIndex].trim() : null;
-
-            if (!isNaN(cardNumber)) { // カードナンバーが有効な数値か確認
-                 parsedCardDetails[cardNumber] = {
-                     "年": isNaN(year) ? null : year,
-                     "月": isNaN(month) ? null : month, // NaNの場合はnullにする
-                     "日": isNaN(day) ? null : day,     // NaNの場合はnullにする
-                     "タイトル": cardTitle || "タイトル不明",
-                     "出来事の概要": eventSummary || "不明", // 出来事の概要もここに格納
-                     "画像ファイル名ベース": imageFileNameBase
-                 };
-                 // cardEvents は不要になるため削除または使用しない
-                 // parsedCardEvents[cardNumber] = eventSummary || "不明";
-            } else {
-                console.warn(`不正なカードナンバーの行をスキップしました: ${lines[i]}`);
-            }
-        }
-         // cardEvents は使用しないので、cardDetails のみ返すように変更
-         return { cardDetails: parsedCardDetails, cardEvents: {} }; // cardEvents は空で返す
-    }
-
-
-    // ゲームの初期化処理（CSV読み込み後に実行）
-    function initializeGame(parsedData) {
-        console.log("initializeGame started."); // 初期化開始ログ
-        cardDetails = parsedData.cardDetails;
-        // cardEvents は parseCardData の修正により不要になりました
-        // cardEvents = parsedData.cardEvents;
-
-        // CSVから読み込んだ全てのカードナンバーを取得
-        allCardNumbers = Object.keys(cardDetails).map(Number);
-
-        // CSVから読み込んだカードが1枚以下の場合、ゲームを開始できない
-        if (allCardNumbers.length <= 1) {
-             document.getElementById('game-message').innerText = 'カードデータが不足しています。ゲームを開始できません。';
-             document.getElementById('game-message').style.color = 'red';
-             document.getElementById('decision-button').disabled = true; // ボタンを無効化
-             console.error("カードデータが不足しています。最低2枚のカードが必要です。");
-             return; // ゲーム初期化を中断
-        }
-
-        // 開始時の手札枚数設定を取得 (localStorageまたはデフォルト値)
-        const initialHandSizeInput = document.getElementById('initial-hand-size');
-        // localStorageから値を取得、なければデフォルト値(4)を使用
-        const savedHandSize = localStorage.getItem(LOCAL_STORAGE_HAND_SIZE_KEY);
-        let initialHandSize = savedHandSize ? parseInt(savedHandSize) : 4;
-
-        // 取得した値が有効な数値であることを確認し、最小1枚、最大で利用可能なカード総数から場札1枚を引いた数に制限
-        initialHandSize = Math.max(1, Math.min(initialHandSize, allCardNumbers.length - 1));
-
-        // 入力フィールドの値を更新して、実際に設定された枚数を表示
-        initialHandSizeInput.value = initialHandSize;
-        // localStorageにも設定された値を保存
-        localStorage.setItem(LOCAL_STORAGE_HAND_SIZE_KEY, initialHandSize);
-
-
-        // 初期の手札、場札の枚数を設定
-        let initialCommonSize = 1;
-
-        // 全てのカードナンバーをシャッフル
-        let shuffledCardNumbers = shuffleArray([...allCardNumbers]);
-
-        // シャッフルされたリストから、初期の手札、場札に必要な枚数を取り出す
-        handCards = shuffledCardNumbers.splice(0, initialHandSize);
-        commonCards = shuffledCardNumbers.splice(0, initialCommonSize);
-
-        // 残ったカードを山札に格納
-        deckCards = shuffledCardNumbers;
-        discardPile = []; // 捨て札は初期値空配列
-
-        console.log("初期手札:", handCards);
-        console.log("初期場札:", commonCards);
-        console.log("初期山札:", deckCards);
-        console.log("初期捨て札:", discardPile);
-
-        // 初期表示の更新
-        updateDebugPanel();
-        updateDecisionButtonState();
-        updateDeckDisplay();
-        // 画像の表示は非同期で行う
-        updateHandDisplay();
-        updateCommonDisplay();
-        updateDiscardDisplay();
-        updateCurrentScoreDisplay();
-         console.log("initializeGame finished."); // 初期化終了ログ
-    }
-
-
-    // 配列をシャッフルする関数 (フィッシャー・イェーツアルゴリズム)
-    function shuffleArray(array) {
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]]; // 要素を交換
-        }
-        return array;
-    }
-
-    // 画像ファイル名ベースから、画像ファイルのURLを取得する関数 (PNG専用に簡略化)
-    function getImageUrl(imageFileNameBase) {
-        if (!imageFileNameBase) {
-            console.log("getImageUrl: imageFileNameBase is null or empty."); // デバッグログ
-            return null; // ファイル名ベースがない場合はnullを返す
-        }
-        // PNGファイルとしてURLを生成
-        const fullFileName = `${imageFileNameBase}.png`;
-        const url = `${IMAGE_BASE_URL}${encodeURIComponent(fullFileName)}`;
-        console.log(`getImageUrl: Generated URL: ${url}`); // 生成されたURLをログ出力
-        return url; // 生成したURLを返す
-    }
-
-
-    // 山札の表示を更新する関数
-    function updateDeckDisplay() {
-        const deckCountElement = document.getElementById('deck-count');
-        if (deckCountElement) {
-            deckCountElement.innerText = deckCards.length;
-        }
-         updateDebugPanel(); // デバッグパネルの枚数表示を更新
-    }
-
-    // 現在の成功/失敗回数表示を更新する関数
-    function updateCurrentScoreDisplay() {
-        const currentSuccessfulElement = document.getElementById('current-successful');
-        const currentFailedElement = document.getElementById('current-failed');
-        if (currentSuccessfulElement) {
-            currentSuccessfulElement.innerText = successfulPlacements;
-        }
-        if (currentFailedElement) {
-            currentFailedElement.innerText = failedPlacements;
-        }
-    }
-
-
-    // 手札の表示を更新する関数
-    function updateHandDisplay() {
-        console.log("updateHandDisplay started."); // ログ追加
-        const handField = document.getElementById('hand-field');
-        handField.innerHTML = ''; // 現在の手札表示をクリア
-
-        for (const cardNo of handCards) {
-            const cardHTML = createFrontCardHTML(cardNo);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = cardHTML.trim();
-            const cardContainer = tempDiv.firstChild;
-            handField.appendChild(cardContainer);
-
-            // 画像をセット
-            const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
-            const imgElement = cardContainer.querySelector('.card-image');
-            const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
-
-            if (imageFileNameBase && imgElement) {
-                 const imageUrl = getImageUrl(imageFileNameBase);
-                 imgElement.src = imageUrl;
-                 imgElement.onload = () => { // 画像読み込み成功時
-                     imgElement.style.opacity = '1'; // 画像を表示 (フェードイン)
-                     imgElement.style.display = 'block'; // 画像を表示
-                     if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
-                 };
-                 imgElement.onerror = () => { // 画像読み込み失敗時
-                      imgElement.style.display = 'none'; // 画像を非表示
-                      if (imagePlaceholder) {
-                           imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                           imagePlaceholder.innerText = '画像なし'; // またはエラーメッセージ
-                      }
-                      console.warn(`Failed to load image for card ${cardNo} at URL: ${imageUrl}`);
-                 };
-            } else {
-                 // 画像ファイル名ベースがない場合やimg要素が見つからない場合
-                 if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
-                 if (imagePlaceholder) {
-                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                      imagePlaceholder.innerText = imageFileNameBase ? '画像要素なし' : '画像ファイル名なし';
-                 }
-            }
-        }
-         updateDebugPanel(); // デバッグパネルの枚数表示を更新
-         console.log("updateHandDisplay finished."); // ログ追加
-    }
-
-    // 場札の表示を更新する関数
-    function updateCommonDisplay() {
-         console.log("updateCommonDisplay started."); // ログ追加
-         const commonField = document.getElementById('common-field');
-         commonField.innerHTML = ''; // 現在の場札表示をクリア
-
-         for (const cardNo of commonCards) {
-             const cardHTML = createBackCardHTML(cardNo);
-             const tempDiv = document.createElement('div');
-             tempDiv.innerHTML = cardHTML.trim();
-             const cardContainer = tempDiv.firstChild;
-             commonField.appendChild(cardContainer);
-
-             // 画像をセット
-             const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
-             const imgElement = cardContainer.querySelector('.card-image');
-             const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
-             const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
-
-             if (imageFileNameBase && imgElement) {
-                  const imageUrl = getImageUrl(imageFileNameBase);
-                  imgElement.src = imageUrl;
-                  imgElement.onload = () => { // 画像読み込み成功時
-                      imgElement.style.opacity = '1'; // 画像を表示 (フェードイン)
-                      imgElement.style.display = 'block'; // 画像を表示
-                      if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
-                      if (dateBar) dateBar.style.display = 'block'; // 日付バーを表示
-                  };
-                  imgElement.onerror = () => { // 画像読み込み失敗時
-                       imgElement.style.display = 'none'; // 画像を非表示
-                       if (imagePlaceholder) {
-                            imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                            imagePlaceholder.innerText = '画像なし'; // またはエラーメッセージ
-                       }
-                       if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
-                       console.warn(`Failed to load image for card ${cardNo} at URL: ${imageUrl}`);
-                  };
-             } else {
-                  // 画像ファイル名ベースがない場合やimg要素が見つからない場合
-                  if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
-                  if (imagePlaceholder) {
-                       imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                       imagePlaceholder.innerText = imageFileNameBase ? '画像要素なし' : '画像ファイル名なし';
-                  }
-                  if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
-             }
-
-
-             // 裏面カードの左/右ボタンにイベントリスナーを設定
-             const leftButton = cardContainer.querySelector('.left-button button'); // ボタン要素を取得
-             if (leftButton) {
-                 leftButton.onclick = () => handleLeftClick(leftButton.id, `${cardNo}`);
-             }
-             const rightButton = cardContainer.querySelector('.right-button button'); // ボタン要素を取得
-              if (rightButton) {
-                  rightButton.onclick = () => handleRightClick(rightButton.id, `${cardNo}`);
-              }
-         }
-          updateDebugPanel(); // デバッグパネルの枚数表示を更新
-          console.log("updateCommonDisplay finished."); // ログ追加
-    }
-
-     // 捨て札の表示を更新する関数
-    function updateDiscardDisplay() {
-        console.log("updateDiscardDisplay started."); // ログ追加
-        const discardField = document.getElementById('discard-field');
-        discardField.innerHTML = ''; // 現在の捨て札表示をクリア
-
-        for (const cardNo of discardPile) {
-            const cardHTML = createDiscardCardHTML(cardNo);
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = cardHTML.trim();
-            const cardContainer = tempDiv.firstChild;
-            discardField.appendChild(cardContainer);
-
-            // 画像をセット
-            const imageFileNameBase = cardDetails[cardNo]?.["画像ファイル名ベース"];
-            const imgElement = cardContainer.querySelector('.card-image');
-            const imagePlaceholder = cardContainer.querySelector('.image-placeholder'); // Placeholder element
-            const dateBar = cardContainer.querySelector('.date-bar'); // 日付バー要素を取得
-
-            if (imageFileNameBase && imgElement) {
-                 const imageUrl = getImageUrl(imageFileNameBase);
-                 imgElement.src = imageUrl;
-                 imgElement.onload = () => { // 画像読み込み成功時
-                     imgElement.style.opacity = '1'; // 画像を表示 (フェードイン)
-                     imgElement.style.display = 'block'; // 画像を表示
-                     if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
-                     if (dateBar) dateBar.style.display = 'block'; // 日付バーを表示
-                 };
-                 imgElement.onerror = () => { // 画像読み込み失敗時
-                      imgElement.style.display = 'none'; // 画像を非表示
-                      if (imagePlaceholder) {
-                           imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                           imagePlaceholder.innerText = '画像なし'; // またはエラーメッセージ
-                      }
-                      if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
-                      console.warn(`Failed to load image for card ${cardNo} at URL: ${imageUrl}`);
-                 };
-            } else {
-                 // 画像ファイル名ベースがない場合やimg要素が見つからない場合
-                 if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
-                 if (imagePlaceholder) {
-                      imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                      imagePlaceholder.innerText = imageFileNameBase ? '画像要素なし' : '画像ファイル名なし';
-                 }
-                 if (dateBar) dateBar.style.display = 'block'; // 日日付バーは表示
-            }
-
-
-            // 確認ボタンにイベントリスナーを設定
-            const confirmButton = cardContainer.querySelector('.discard-confirm-button button');
-            if (confirmButton) {
-                 confirmButton.onclick = () => showDiscardCardInfo(`${cardNo}`);
-            }
-        }
-         updateDebugPanel(); // デバッグパネルの枚数表示を更新
-         console.log("updateDiscardDisplay finished."); // ログ追加
-    }
-
-
-    // ゲームメッセージを表示する関数
-    function displayGameMessage(message, isSuccess) {
-        const gameMessageElement = document.getElementById('game-message');
-        if (gameMessageElement) {
-            gameMessageElement.innerText = message;
-            gameMessageElement.style.color = isSuccess ? 'green' : 'red'; // 成功なら緑、失敗なら赤
-            // 3秒後にメッセージをクリア
-            setTimeout(() => {
-                gameMessageElement.innerText = '';
-            }, 3000);
-        }
-    }
-
-    // 捨て札のカード情報を表示する関数
-    function showDiscardCardInfo(cardNo) {
-        console.log(`捨て札カード ${cardNo} の情報表示`);
-        const detail = cardDetails[cardNo];
-        // cardDetails に出来事の概要を格納するように変更したので、そこから取得
-        const eventDescription = detail?.["出来事の概要"] || "不明";
-
-        const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
-        if (cardInfoTextElement && detail) {
-            // カード情報パネルにはタイトルと出来事のみ表示
-            cardInfoTextElement.innerHTML = `
-                <strong>タイトル:</strong><br>${detail["タイトル"] || "タイトル不明"}<br>
-                <strong>出来事:</strong><br>${eventDescription}
-            `;
-        } else if (cardInfoTextElement) {
-            cardInfoTextElement.innerText = `カードNo ${cardNo} の情報が見つかりません.`;
-        }
-
-        // デバッグパネルにカード詳細を表示
-        updateDebugPanelWithCardDetails(cardNo);
-    }
-
-
-    // デバッグパネルの表示を更新する関数
-    function updateDebugPanel() {
-        // デバッグパネルが非表示の場合は更新しない
-        const debugPanel = document.getElementById('debug-panel');
-        if (debugPanel && debugPanel.style.display === 'none') {
-            return;
-        }
-
-        const debugSelectedFrontElement = document.getElementById('debug-selected-front');
-        if (debugSelectedFrontElement) {
-            debugSelectedFrontElement.innerText = `選択された表面カード: ${selectedFrontCardNo || 'なし'}`;
-        }
-        const debugSelectedBackElement = document.getElementById('debug-selected-back');
-        if (debugSelectedBackElement) {
-            debugSelectedBackElement.innerText = `選択された裏面カード: ${selectedBackCardNo || 'なし'}`;
-        }
-         const debugBackButtonElement = document.getElementById('debug-back-button');
-         if (debugBackButtonElement) {
-             debugBackButtonElement.innerText = `裏面選択ボタン: ${selectedBackCardButton || 'なし'}`;
-         }
-         const debugResultElement = document.getElementById('debug-result'); // 判定結果表示用
-         if (debugResultElement) {
-             // 決定後に判定結果を表示し、リセット時は「なし」に戻す
-             if (selectedFrontCardNo === null && selectedBackCardNo === null) {
-                  debugResultElement.innerText = `判定結果: なし`;
-             }
-         }
-         // 各フィールドの枚数を表示
-         const debugCountsElement = document.getElementById('debug-counts');
-         if (debugCountsElement) {
-             debugCountsElement.innerText = `枚数: 手札${handCards.length}, 場札${commonCards.length}, 山札${deckCards.length}, 捨て札${discardPile.length}`;
-         }
-          // 捨て札情報を表示
-          const debugDiscardInfoElement = document.getElementById('debug-discard-info'); // 変数名を修正
-          if(debugDiscardInfoElement) {
-              debugDiscardInfoElement.innerText = `捨て札情報: [${discardPile.join(', ')}]`;
-          }
-
-          // 選択されたカードの詳細をデバッグパネルに表示 (選択解除時はクリア)
-          if (selectedFrontCardNo !== null) {
-              updateDebugPanelWithCardDetails(selectedFrontCardNo);
-          } else if (selectedBackCardNo !== null) {
-               // 場札のカードが選択された場合も詳細を表示
-               updateDebugPanelWithCardDetails(selectedBackCardNo);
-          }
-           else {
-             // どちらも選択されていない場合はクリア
-             const debugCardDetailsElement = document.getElementById('debug-selected-card-details');
-             if(debugCardDetailsElement) {
-                 debugCardDetailsElement.innerText = '選択されたカード詳細: なし';
-             }
-          }
-    }
-
-    // デバッグパネルにカード詳細を表示する補助関数
-    function updateDebugPanelWithCardDetails(cardNo) {
-        // デバッグパネルが非表示の場合は更新しない
-        const debugPanel = document.getElementById('debug-panel');
-        if (debugPanel && debugPanel.style.display === 'none') {
-            return;
-        }
-
-        const debugCardDetailsElement = document.getElementById('debug-selected-card-details');
-        const detail = cardDetails[cardNo];
-         if (debugCardDetailsElement && detail) {
-             debugCardDetailsElement.innerHTML = `
-                 選択されたカード詳細:<br>
-                 No: ${cardNo}, 年: ${detail["年"] || "不明"}, 月: ${detail["月"] === null ? "不明" : detail["月"]}, 日: ${detail["日"] === null ? "不明" : detail["日"]}
-             `;
-         } else if (debugCardDetailsElement) {
-             debugCardDetailsElement.innerText = '選択されたカード詳細: 情報なし';
-         }
-    }
-
-
-    function updateDecisionButtonState() {
-        const decisionButton = document.getElementById('decision-button');
-        if (selectedFrontCardNo !== null && selectedBackCardNo !== null) {
-            decisionButton.innerText = '決定する'; // 選択条件を満たしたらテキスト変更
-            decisionButton.disabled = false; // ボタンを有効化
-        } else {
-            decisionButton.innerText = 'カードと移動先を選択して下さい'; // 初期テキスト
-            decisionButton.disabled = true; // ボタンを無効化
-        }
-    }
-
-    function updateInfoPanel(cardNo) {
-        const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
-        const detail = cardDetails[cardNo];
-        // cardDetails に出来事の概要を格納するように変更したので、そこから取得
-        const eventDescription = detail?.["出来事の概要"] || "不明";
-
-        if (cardInfoTextElement && detail) {
-             // カード情報パネルにはタイトルと出来事のみ表示
-             cardInfoTextElement.innerHTML = `
-                <strong>タイトル:</strong><br>${detail["タイトル"] || "タイトル不明"}<br>
-                <strong>出来事:</strong><br>${eventDescription}
-            `;
-        } else if (cardInfoTextElement) {
-            cardInfoTextElement.innerText = 'ここに選択したカードの情報が表示されます.'; // 情報が見つからない場合もデフォルトメッセージ
-        }
-    }
-
-    function updateInfoPanelDefault() {
-        const cardInfoTextElement = document.getElementById('card-info-panel').querySelector('p'); // p要素を選択
-        if (cardInfoTextElement) {
-            cardInfoTextElement.innerText = 'ここに選択したカードの情報が表示されます.';
-        }
-    }
-
-    // 手札のカードを選択/選択解除
-    function toggleSelect(buttonId, cardNo) {
-        console.log(`toggleSelect called for button ID: ${buttonId}, card No: ${cardNo}`);
-        console.log(`Before toggle: selectedFrontCardNo = ${selectedFrontCardNo}`);
-
-        const button = document.getElementById(buttonId);
-        const isSelected = button.innerText === '選択中';
-        console.log(`Button is currently selected: ${isSelected}`);
-
-        // 他の選択中の表面カードの選択を解除
-        // 手札フィールド内の全ての「選択」ボタンを取得
-        const allSelectButtons = document.querySelectorAll('#hand-field button[id^="select-button-"]');
-        allSelectButtons.forEach(btn => {
-            const btnCardNumber = btn.getAttribute('data-card-number');
-            // 現在選択中のカードと一致する場合、またはクリックされたカードと一致する場合以外をリセット
-            // ここでselectedFrontCardNoがnullでないことを確認
-            if (selectedFrontCardNo !== null && btnCardNumber === selectedFrontCardNo) {
-                 btn.innerText = '選択';
-                 console.log(`Deselecting previously selected button: ${btn.id} for card ${btnCardNumber}`);
-            }
-             // クリックされた以外のボタンで「選択中」になっているものをリセット（念のため）
-            if (btn.id !== buttonId && btn.innerText === '選択中') {
-                 btn.innerText = '選択';
-                 console.log(`Deselecting another selected button: ${btn.id} for card ${btnCardNumber}`);
-            }
-        });
-
-
-        // クリックされたカードを選択状態にする
-        if (!isSelected) {
-            button.innerText = '選択中';
-            selectedFrontCardNo = cardNo;
-            updateInfoPanel(cardNo);
-            updateDebugPanelWithCardDetails(cardNo); // デバッグパネルに詳細を表示
-             console.log(`Selected card ${cardNo}. selectedFrontCardNo is now ${selectedFrontCardNo}`);
-        } else {
-            // 同じカードがクリックされた場合は選択解除
-            button.innerText = '選択';
-            selectedFrontCardNo = null;
-            updateInfoPanelDefault();
-            updateDebugPanelWithCardDetails(null); // デバッグパネルの詳細をクリア
-             console.log(`Deselected card ${cardNo}. selectedFrontCardNo is now ${selectedFrontCardNo}`);
-        }
-
-        updateDebugPanel();
-        updateDecisionButtonState();
-    }
-
-    // 裏面カードの左ボタンがクリックされた時の処理
-    function handleLeftClick(buttonId, cardNo) {
-        console.log('裏面左ボタンがクリックされました - ボタンID', buttonId, ' カードNo', cardNo);
-
-        // 以前選択されていた裏面ボタンの表示をリセット
-        if (lastSelectedBackButtonElement) {
-             if (lastSelectedBackButtonElement.id.startsWith('left-button-')) {
-                 lastSelectedBackButtonElement.innerText = '左';
-             } else if (lastSelectedBackButtonElement.id.startsWith('right-button-')) {
-                 lastSelectedBackButtonElement.innerText = '右';
-             }
-        }
-
-        const button = document.getElementById(buttonId);
-        button.innerText = '左選択中'; // クリックされたボタンの表示を変更
-        lastSelectedBackButtonElement = button; // 選択されたボタンを記録
-
-        selectedBackCardNo = cardNo;
-        selectedBackCardButton = 'left'; // 左ボタンで選択されたことを記録
-
-        updateInfoPanel(cardNo);
-        updateDebugPanelWithCardDetails(cardNo); // デバッグパネルに詳細を表示
-        updateDebugPanel();
-        updateDecisionButtonState();
-    }
-
-    // 裏面カードの右ボタンがクリックされた時の処理
-    function handleRightClick(buttonId, cardNo) {
-        console.log('裏面右ボタンがクリックされました - ボタンID', buttonId, ' カードNo', cardNo);
-
-         // 以前選択されていた裏面ボタンの表示をリセット
-        if (lastSelectedBackButtonElement) {
-             if (lastSelectedBackButtonElement.id.startsWith('left-button-')) {
-                 lastSelectedBackButtonElement.innerText = '左';
-             } else if (lastSelectedBackButtonElement.id.startsWith('right-button-')) {
-                 lastSelectedBackButtonElement.innerText = '右';
-             }
-        }
-
-        const button = document.getElementById(buttonId);
-        button.innerText = '右選択中'; // クリックされたボタンの表示を変更
-        lastSelectedBackButtonElement = button; // 選択されたボタンを記録
-
-        selectedBackCardNo = cardNo;
-        selectedBackCardButton = 'right'; // 右ボタンで選択されたことを記録
-
-        updateInfoPanel(cardNo);
-        updateDebugPanelWithCardDetails(cardNo); // デバッグパネルに詳細を表示
-        updateDebugPanel();
-        updateDecisionButtonState();
-    }
-
-    // カードの日付を比較する関数
-    // cardNo1 が cardNo2 より古い場合は -1, 新しい場合は 1, 同じ場合は 0 を返す
-    // 月や日が不明な場合も考慮して比較する
-    function compareDates(cardNo1, cardNo2) {
-        const detail1 = cardDetails[cardNo1];
-        const detail2 = cardDetails[cardNo2];
-
-        if (!detail1 || !detail2) {
-            console.warn(`カード情報が見つかりません: ${cardNo1} または ${cardNo2}`);
-            return 0; // 情報がない場合は比較不能
-        }
-
-        // 年の比較
-        if (detail1["年"] !== null && detail2["年"] !== null) {
-            if (detail1["年"] < detail2["年"]) return -1;
-            if (detail1["年"] > detail2["年"]) return 1;
-        } else if (detail1["年"] !== null && detail2["年"] === null) {
-             return 1; // detail1だけ年が分かっている場合は新しい
-        } else if (detail1["年"] === null && detail2["年"] !== null) {
-             return -1; // detail2だけ年が分かっている場合は古い
-        }
-        // 両方nullまたは同じ年
-
-        // 月の比較
-        if (detail1["月"] !== null && detail2["月"] !== null) {
-            if (detail1["月"] < detail2["月"]) return -1;
-            if (detail1["月"] > detail2["月"]) return 1;
-        } else if (detail1["月"] !== null && detail2["月"] === null) {
-             return 1; // detail1だけ月が分かっている場合は新しい
-        } else if (detail1["月"] === null && detail2["月"] !== null) {
-             return -1; // detail2だけ月が分かっている場合は古い
-        }
-         // 両方nullまたは同じ月
-
-        // 日の比較
-        if (detail1["日"] !== null && detail2["日"] !== null) {
-            if (detail1["日"] < detail2["日"]) return -1;
-            if (detail1["日"] > detail2["日"]) return 1;
-        } else if (detail1["日"] !== null && detail2["日"] === null) {
-             return 1; // detail1だけ日が分かっている場合は新しい
-        } else if (detail1["日"] === null && detail2["日"] !== null) {
-             return -1; // detail2だけ日が分かっている場合は古い
-        }
-         // 両方nullまたは同じ日
-
-        // 全て不明または同じ
-        return 0;
-    }
-
-
-    // 山札からカードを引く関数
-    function drawCard() {
-        if (deckCards.length > 0) {
-            const drawnCardNo = deckCards.shift(); // 山札の先頭からカードを引く
-            console.log(`山札からカード ${drawnCardNo} を引きました。`); // デバッグログ
-            updateDeckDisplay(); // 山札の表示を更新
-            return drawnCardNo;
-        }
-        console.log("山札が空です。カードを引けません。"); // デバッグログ
-        updateDeckDisplay(); // 山札の表示を更新 (0枚になる)
-        return null; // 山札が空の場合
-    }
-
-    // 手札にカードを追加する関数
-    function addCardToHand(cardNo) {
-        handCards.push(cardNo);
-        console.log(`手札にカード ${cardNo} を追加しました。`); // デバッグログ
-        updateHandDisplay(); // 手札の表示を更新
-    }
-
-    // 捨て札にカードを追加する関数
-    function addCardToDiscard(cardNo) {
-        discardPile.push(cardNo);
-        console.log(`カード ${cardNo} を捨て札に移動しました。現在の捨て札:`, discardPile); // デバッグログ
-        updateDiscardDisplay(); // 捨て札の表示を更新
-    }
-
-    // ゲーム終了処理
-    function endGame(message) {
-        console.log("ゲーム終了:", message);
-        // 決定ボタンを無効化
-        const decisionButton = document.getElementById('decision-button');
-        if (decisionButton) {
-            decisionButton.disabled = true;
-            decisionButton.innerText = "ゲーム終了";
-        }
-
-        // ゲームメッセージを表示
-        displayGameMessage(message, true); // 終了メッセージは緑色で表示
-
-        // スコアパネルを表示
-        showScorePanel(message);
-    }
-
-    // ゲーム終了時のスコアパネルを表示する関数
-    function showScorePanel(finalMessage) {
-        const scorePanel = document.getElementById('score-panel');
-        const finalMessageElement = document.getElementById('final-message');
-        const scoreDetailsElement = document.getElementById('score-details');
-
-        if (scorePanel && finalMessageElement && scoreDetailsElement) {
-            finalMessageElement.innerText = finalMessage;
-            scoreDetailsElement.innerHTML = `成功: ${successfulPlacements} 回<br>失敗: ${failedPlacements} 回`;
-            scorePanel.style.display = 'block'; // スコアパネルを表示
-        }
-    }
-
-    // ヘルパー関数：裏面カード要素のボタンにイベントリスナーを設定
-    function setupBackCardButtonListeners(cardElement, cardNo) {
-        const leftButton = cardElement.querySelector('.left-button button');
-        if (leftButton) {
-            leftButton.onclick = () => handleLeftClick(leftButton.id, `${cardNo}`);
-        }
-        const rightButton = cardElement.querySelector('.right-button button');
-        if (rightButton) {
-            rightButton.onclick = () => handleRightClick(rightButton.id, `${cardNo}`);
-        }
-    }
-
-    // 決定ボタンがクリックされた時の処理
-    function handleDecision() {
-        console.log('決定ボタンがクリックされました');
-        // 決定ボタンが有効（両方のカードが選択されている）の場合のみ処理を実行
-        if (selectedFrontCardNo !== null && selectedBackCardNo !== null) {
-            console.log(`決定処理開始: 表面カード ${selectedFrontCardNo}, 裏面カード ${selectedBackCardNo}, 裏面選択ボタン: ${selectedBackCardButton}`);
-
-            const frontCardElement = document.querySelector(`#hand-field div.card-container[data-card-number="${selectedFrontCardNo}"]`);
-            const backCardElement = document.querySelector(`#common-field div.card-container.card-back-container[data-card-number="${selectedBackCardNo}"]`);
-
-            if (frontCardElement && backCardElement) {
-                // 手札からカードを削除（データのみ）
-                const handCardIndex = handCards.indexOf(parseInt(selectedFrontCardNo));
-                if (handCardIndex > -1) {
-                    handCards.splice(handCardIndex, 1);
-                    console.log(`手札データからカード ${selectedFrontCardNo} を削除しました。`);
-                } else {
-                     console.warn(`エラー: 手札データからカード ${selectedFrontCardNo} を見つけられませんでした。`);
-                }
-
-                 // 手札のDOM要素を削除
-                 if (frontCardElement && frontCardElement.parentNode) {
-                     frontCardElement.parentNode.removeChild(frontCardElement);
-                     console.log(`手札表示からカード ${selectedFrontCardNo} を削除しました。`);
-                 } else {
-                     console.warn(`エラー: 手札表示からカード ${selectedFrontCardNo} を見つけられませんでした。`);
-                 }
-
-                // 手札表示を更新
-                updateHandDisplay();
-
-
-                const commonField = document.getElementById('common-field');
-                if (commonField && commonField.contains(backCardElement)) {
-
-                   // 場札のターゲットカードのインデックスを取得
-                   const targetCardNo = parseInt(selectedBackCardNo);
-                   const backIndex = commonCards.indexOf(targetCardNo);
-                   let isCorrect = false;
-                   let resultText = "";
-                   let leftNeighborCardNo = null;
-                   let rightNeighborCardNo = null;
-
-                   // 挿入位置の左右のカードを取得
-                   if (selectedBackCardButton === 'left') {
-                       // 左に挿入する場合、右隣は selectedBackCardNo
-                       rightNeighborCardNo = targetCardNo;
-                       // 左隣は targetCardNo の一つ前のカード (存在する場合)
-                       if (backIndex > 0) {
-                           leftNeighborCardNo = commonCards[backIndex - 1];
-                       }
-                   } else if (selectedBackCardButton === 'right') {
-                       // 右に挿入する場合、左隣は selectedBackCardNo
-                       leftNeighborCardNo = targetCardNo;
-                       // 右隣は targetCardNo の一つ後のカード (存在する場合)
-                       if (backIndex < commonCards.length - 1) {
-                           rightNeighborCardNo = commonCards[backIndex + 1];
-                       }
-                   }
-
-                   console.log(`挿入位置情報: 左隣=${leftNeighborCardNo}, 右隣=${rightNeighborCardNo}, 選択された裏面=${selectedBackCardNo}, ボタン=${selectedBackCardButton}`);
-
-
-                   // 新しい判定ロジック (二枚判定)
-                   if (selectedBackCardButton === 'left') {
-                       // 左に置いた場合 (手札のカードが左隣より新しく、右隣より古い、または同じと予測)
-                       // 左隣がない場合は常に新しいとみなす (compareDates >= 0)
-                       let leftComparison = (leftNeighborCardNo === null) ? 1 : compareDates(selectedFrontCardNo, leftNeighborCardNo);
-                       // 右隣は必ず存在する
-                       let rightComparison = compareDates(selectedFrontCardNo, rightNeighborCardNo);
-
-                       if (leftComparison >= 0 && rightComparison <= 0) {
-                           isCorrect = true;
-                           resultText = "成功！ (予測: 間に配置, 結果: 間に配置)";
-                       } else {
-                           isCorrect = false;
-                           if (leftComparison < 0) {
-                               resultText = "失敗... (予測: 間に配置, 結果: 左隣より古い)";
-                           } else { // rightComparison > 0
-                               resultText = "失敗... (予測: 間に配置, 結果: 右隣より新しい)";
-                           }
-                       }
-                   } else if (selectedBackCardButton === 'right') {
-                       // 右に置いた場合 (手札のカードが左隣より新しく、右隣より古い、または同じと予測)
-                        // 左隣は必ず存在する
-                        let leftComparison = compareDates(selectedFrontCardNo, leftNeighborCardNo);
-                        // 右隣がない場合は常に古いとみなす (compareDates <= 0)
-                        let rightComparison = (rightNeighborCardNo === null) ? -1 : compareDates(selectedFrontCardNo, rightNeighborCardNo);
-
-                        if (leftComparison >= 0 && rightComparison <= 0) {
-                            isCorrect = true;
-                            resultText = "成功！ (予測: 間に配置, 結果: 間に配置)";
-                        } else {
-                            isCorrect = false;
-                            if (leftComparison < 0) {
-                                resultText = "失敗... (予測: 間に配置, 結果: 左隣より古い)";
-                            } else { // rightComparison > 0
-                                resultText = "失敗... (予測: 間に配置, 結果: 右隣より新しい)";
-                            }
+    <script>
+        // Small Improvement Card CSV data
+        const smallImprovementCsvText = `ID,名称,効果,評価点,小進歩,強すぎるカード
+A014,大工の金鎚,同時に2部屋以上建設するたびに、資材の合計から葦2と、木/レンガ/石の家ならば木材2/レンガ3/石材4安くなる。,9.5,小進歩,強すぎるカード
+A033,新しい土地,まだ始まっていないラウンド1つにつき、すぐに食料2と1点ボーナスを得る。,7.83,小進歩,強すぎるカード
+A039,礼拝所,このカードは全員が使えるアクションスペースとなる。ここを使ったプレイヤーはボーナス3点を得る。ほかのプレイヤーが使うときは、まずあなたに小麦1を渡さなければならない。,9.5,小進歩,強すぎるカード
+A048,削り馬,木材1以上を入庫する（ストックに入れる）たびに、その後あなたのストックに木材5以上あれば木材1を食料3に交換できる。木材7以上あれば必ず交換しなければならない。,9,小進歩,強すぎるカード
+A082,労働証明書,アクションスペースを使うたびに、その後で建設資材が4つ以上ある建設資材の累積スペース1か所から建設資材を1つ取れる。,7.5,小進歩,強すぎるカード
+B010,移動住宅,このカードが家族1人分の住む場所となる。,9.83,小進歩,強すぎるカード
+B015,工作台,木材の累積スペースを使うたび、その直後にそこで得た木材（だけ）を使って牧場を1つだけ建設できる。そうしたらなら、柵1本分は無料となる。,9.5,小進歩,強すぎるカード
+B021,干し草倉,このカード上に食料4を置く。小麦1以上を入庫する(ストックに入れる)たびに、追加でカード上の食料1を得る。食料がなくなり次第、「家族を増やす。住む場所がなくてもよい」アクションを得る。,9.5,小進歩,強すぎるカード
+B022,旅行靴,すぐに食料2を得る。すぐにあなたのストックにある人物1人を配置する。次の帰宅フェイズにその配置した人物をゲームから取り除く。,7,小進歩,強すぎるカード
+C003,馬車旅行,このカードを労働フェイズ中に出したなら、すぐに他の人物1人を配置する。このカードは自分の前に置かず、左隣のプレイヤーの手札に入れる。,8.67,小進歩,強すぎるカード
+C012,牛牧場,このカードの上を、牛を飼う場所にできる。収容数は農場の牧場1つにつき牛1頭。,4,小進歩,弱すぎるカード
+C028,教師机,アクションスペース「大きい進歩」または「家の建て直し」を使うたび、食料1のコストで職業1を出すことができる。,9.5,小進歩,強すぎるカード
+C031,書斎,得点計算時に、マイナス点の合計と等しい数のボーナス点を得る。（ただし最大7点まで）。,9,小進歩,強すぎるカード
+C063,クラフトビール醸造所,各収穫の食料供給フェイズで、このカードを使って自分のストックの小麦1と畑の小麦1をボーナス2点と食料4に交換できる。,9.5,小進歩,強すぎるカード
+C084,ライ麦飼料,収穫で終わらない各ラウンドで、小麦1を払うことで家畜ちょうど1種類を繁殖できる。（これは繁殖フェイズとは見なさない）,4.67,小進歩,弱すぎるカード
+D004,横挽きの木材,すぐに、自分のストックの石材と同数の木材を得る。このカードは自分の前に置かず、左隣のプレイヤーの手札に入れる。,9.17,小進歩,強すぎるカード
+D019,粉砕鋤,レンガの累積スペースを使用するたび、その直後にレンガ1を払って畑1を耕せる。そうするなら、支払ったレンガをその累積スペースに置く。,9.5,小進歩,強すぎるカード
+D021,男児求む,家に空き部屋があるなら、「小さい進歩」アクションを得るたび、代わりに「家族を増やす」アクションを行える。,7.5,小進歩,強すぎるカード
+D033,避暑地の別荘,得点計算時、石の家に住んでいれば、家と縦横に隣接する未使用スペースそれぞれにつきボーナス2点を得る。（未使用スペースのマイナス点は通常通り。）,9.5,小進歩,強すぎるカード
+D074,王家の木材,アクションスペース「農場拡充」を使用するか、進歩を建設した手番の終わりに、それらのアクションで支払った木材2につき木材1を得る（切り捨て）。,8.5,小進歩,強すぎるカード
+E022,客室,すぐにあなたの所有する食料を好きな数だけこのカードの上に置く。各ラウンドに1度、このカードの上の食料1を捨てることで、あなたのストックにある人物を1人配置できる。,7.5,小進歩,強すぎるカード`;
+
+        // Job Card CSV data
+        const jobCardCsvText = `ID,名称,効果,評価点,種類,評価
+A097,新入生,1手番につき1回までと、各収穫につき1回まで、「パンを焼く」アクションのたびに、そのアクションの代わりに、職業コストなしで職業を1枚出せる。,8.5,職業,強すぎるカード
+A100,後見人,各ラウンドの帰宅フェイズに人物3人以上を累積スペースから戻すたびに、食料1を払えばボーナス1点を得る。,7,職業,弱すぎるカード
+A107,待ち構え,建設資材がちょうど5/4/3ある建設資材の累積スペースを、あなたのそのラウンドの1/2/3番目の人物で使うたびに食料1を得る。,1,職業,弱すぎるカード
+A131,工芸指南,大きい進歩の「家具製作所」か「製陶所」か「カゴ製作所」を建設するたびに、職業を2枚まで職業コストなしで出せる。,9,職業,強すぎるカード
+A133,ほら吹き,得点計算のとき、自分の前に進歩カードが5/6/7/8/9/10枚あれば、2/3/4/5/7/9点ボーナスを得る。,10,職業,強すぎるカード
+A144,係争物取り扱い人,このカードの上に葦3とレンガ4を置く。次に牧場3/畑タイル5を達成したプレイヤーはカードに置いた葦3/レンガ4を得る。（さかのぼって適用しない）,2,職業,弱すぎるカード
+A151,吟遊楽人,各帰宅フェイズのはじめに、ラウンド1から4のアクションスペースカードが1か所だけ空いていればその効果を得られる。（これは人物を配置せず、「アクションスペースを使う」とはみなさない）,3.33,職業,弱すぎるカード
+A154,主計官,ほかのプレイヤーが食料の累積スペースを使うたびに、そのプレイヤーにあなたのストックから小麦1を渡せばボーナス1点を得る。,2.83,職業,弱すぎるカード
+A167,種畜買い付け人,木/レンガ/石の部屋を1部屋以上建設して、同じ手番中に厩も1軒以上建設するたびに、追加で羊/猪/牛を1得る。,3,職業,弱すぎるカード
+B101,建具大工,各収穫で、（あなたを含む）いずれかのプレイヤーが「家具製作所」かその改良進歩を持っていれば、あなたは食料2でボーナス1点だけ購入できる。,5,職業,弱すぎるカード
+B117,情報屋,このカードを出したとき、すぐに木材1を得る。各労働フェイズの後で、あなたのストックの石材がレンガより多ければ、木材1を得る。,9.33,職業,強すぎるカード
+B132,地主,未使用の農場スペースが無くなり次第、収穫する野菜1つにつきボーナス1点を得る。,9.5,職業,強すぎるカード
+B139,森林科学者,各ラウンドの帰宅フェイズにゲームボード上に木材が1つも残っていなければ、食料1を得る。ラウンド5からは代わりに食料2を得る。,3.17,職業,弱すぎるカード
+B147,緑衣の狩人,木材の累積スペースを使うたびに、その後で小麦1を払えば猪1を得る。,1.5,職業,弱すぎるカード
+B151,小百姓,このカードを出したときすぐに石材1を得る。ちょうど2部屋の木の家に住んでいる限り、（「集会所」を除く）アクションスペースはすべて、占有されていないものとして扱う。,7.83,職業,強すぎるカード
+B161,軟弱者,労働フェイズであなたの手番のたびに、品物5以上の累積スペースが1か所以上あるのに、それらを使わなければ野菜1を得る。,8.5,職業,強すぎるカード
+C099,ガーデンデザイナー,得点計算の開始時に、空いている畑に好きな数の食料を置くことができる。食料1/4/7がある畑1つにつきボーナス1/2/3点を得る。,10,職業,強すぎるカード
+C102,森林保護者,木材の累積スペースを使うたび、その後で自分のストックからそのスペースに木材4を置くことで、石材2とレンガ1と葦1と小麦1を得ることができる。,8.5,職業,強すぎるカード
+C125,夜間労働者,各労働フェイズの開始前、自分のストックにない建設資材の累積スペースに人物1を置くことができる。（その後、スタートプレイヤーからゲームを続ける。）,8,職業,強すぎるカード
+C154,双子の研究者,ちょうど同じ数の品物がある同じ種類の品物の累積スペース2つのうち1つを使用するたび、食料1を払うことでボーナス1点も購入できる。,4.5,職業,弱すぎるカード
+C157,資源分析者,各ラウンドの開始前、あなたの所有する建築資材2種類以上が他の全てのプレイヤーより多ければ、食料1を得る。,2.5,職業,弱すぎるカード
+C158,森林活動家,あなたが人物を置く前、累積スペースに木材が合計8以上ある場合、そのたびに食料1を得る。,4.5,職業,弱すぎるカード
+D092,児童相談員,ラウンド5以降、家に空き部屋があれば、人物のアクションの終わりに、その人物で「家族を増やす」アクションを行える。そうするなら、マイナス2点を得る。,7,職業,強すぎるカード
+D097,無心する学生,このカードを出したとき、すぐに物乞い1を得る。収穫のはじめに職業コストを支払うことなく職業1を出してもよい。,9.33,職業,強すぎるカード
+D101,菓子職人,アクションスペース「穀物活用」を使用するたび、その後に食料1を支払ってボーナス1点を購入できる。その食料はそのアクションスペースに置く。（に使用したプレイヤーが得る。）,4.5,職業,弱すぎるカード
+D116,樹木検査人,このカードはあなただけが使える累積スペース「木材1」である。アクションスペースカード「石切り場」が新たに公開されるたび、このカードの上の木材を全て捨てなければならない。,5.17,職業,弱すぎるカード
+D137,交易教師,アクションスペース「授業」を使用するたび、その後で異なる種類の建設資材を2つまで購入できる。小麦、石材、羊、猪は食料1。牛と野菜は食料2必要。,9.5,職業,強すぎるカード
+D140,大口叩き,累積スペースから、建設資材を4つ以上取るか、家畜を4頭以上取るたび、追加で食料1を得る。,1.33,職業,弱すぎるカード
+D165,猪追い,家畜の累積スペースを使用するたび、そのスペースの上下に隣接するアクションスペースをあなたが占有しているなら、追加で猪1を得る。,3.5,職業,弱すぎるカード
+E108,ブラックベリー農家,柵を建設するたびに、建設した柵の本数まで、残りのラウンドのラウンドスペースに食料1ずつを置く。各ラウンドのはじめに、その食料を得る。,5,職業,弱すぎるカード`;
+
+        /**
+         * Parses CSV text and appends table rows to the specified tbody.
+         * @param {string} csvText - The CSV data to display.
+         * @param {string} targetBodyId - The ID of the tbody element where data will be appended.
+         */
+        function displayCsv(csvText, targetBodyId) {
+            const cardListBody = document.getElementById(targetBodyId);
+            const rows = csvText.split('\n');
+            const dataRows = rows.slice(1); // Skip header row
+
+            dataRows.forEach(row => {
+                // Parse each CSV row (considering commas within double quotes)
+                const columns = row.match(/(?:^|,)(?:"(?:[^"]|"")*"|[^,]*)/g);
+
+                if (columns && columns.length >= 6) { // Check if expected number of columns exist
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50';
+
+                    const cleanColumns = columns.map(col => {
+                        let cleaned = col.startsWith(',') ? col.substring(1) : col;
+                        if (cleaned.startsWith('"') && cleaned.endsWith('"')) {
+                            cleaned = cleaned.substring(1, cleaned.length - 1).replace(/""/g, '"');
                         }
-                   } else {
-                       console.warn("裏面選択ボタンの状態が不正です。");
-                       resultText = "エラー: 不正な選択";
-                       isCorrect = false; // 不正な場合は失敗扱い
-                   }
+                        return cleaned;
+                    });
 
+                    const id = cleanColumns[0];
+                    const name = cleanColumns[1];
+                    const effect = cleanColumns[2];
+                    const rating = cleanColumns[3];
+                    const type = cleanColumns[4]; // Type (Small Improvement / Job)
+                    const evaluation = cleanColumns[5]; // Evaluation (Too Strong / Too Weak)
 
-                   // スコアの更新
-                   if (isCorrect) {
-                       successfulPlacements++;
-                   } else {
-                       failedPlacements++;
-                   }
-                   updateCurrentScoreDisplay(); // 現在のスコア表示を更新
+                    // Create and append each cell
+                    const tdId = document.createElement('td');
+                    tdId.className = 'px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900';
+                    tdId.textContent = id;
+                    tr.appendChild(tdId);
 
-                   // 判定結果をデバッグパネルに表示
-                   const debugResultElement = document.getElementById('debug-result');
-                   if (debugResultElement) {
-                       debugResultElement.innerText = `判定結果: ${resultText}`;
-                   }
+                    const tdName = document.createElement('td');
+                    // 名称の列はテキストを折り返すように変更
+                    tdName.className = 'px-6 py-4 text-sm text-gray-900 wrap-text';
+                    tdName.textContent = name;
+                    tr.appendChild(tdName);
 
-                   // ゲームメッセージを表示
-                   displayGameMessage(resultText, isCorrect);
+                    const tdEffect = document.createElement('td');
+                    // 効果の文字サイズを小さくし、テキストを折り返すように設定
+                    tdEffect.className = 'px-6 py-4 text-xs text-gray-500 wrap-text';
+                    tdEffect.textContent = effect;
+                    tr.appendChild(tdEffect);
 
+                    const tdRating = document.createElement('td');
+                    tdRating.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                    tdRating.textContent = rating;
+                    tr.appendChild(tdRating);
 
-                   if (isCorrect) {
-                       // 成功: 手札から移動するカードを裏面表示用のHTML構造に変換して場に挿入
-                       const movedCardBackHTML = createBackCardHTML(selectedFrontCardNo);
-                       const movedCardElement = new DOMParser().parseFromString(movedCardBackHTML, 'text/html').body.firstChild;
+                    const tdType = document.createElement('td');
+                    tdType.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                    tdType.textContent = type;
+                    tr.appendChild(tdType);
 
-                       const targetElement = document.querySelector(`#common-field div.card-container.card-back-container[data-card-number="${targetCardNo}"]`);
+                    const tdEvaluation = document.createElement('td');
+                    tdEvaluation.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                    tdEvaluation.textContent = evaluation;
+                    tr.appendChild(tdEvaluation);
 
-                       if (targetElement) {
-                            if (selectedBackCardButton === 'left') {
-                                targetElement.before(movedCardElement);
-                                console.log(`成功: カード ${selectedFrontCardNo} を ${selectedBackCardNo} の左に挿入しました。（DOM操作）`);
-                            } else if (selectedBackCardButton === 'right') {
-                                targetElement.after(movedCardElement);
-                                console.log(`成功: カード ${selectedFrontCardNo} を ${selectedBackCardNo} の右に挿入しました。（DOM操作）`);
-                            }
-
-                            // アニメーションを開始するためにクラスを追加
-                            movedCardElement.classList.add('card-entering');
-
-                            // 新しいカードの画像読み込みを開始
-                            const imageFileNameBase = cardDetails[selectedFrontCardNo]?.["画像ファイル名ベース"];
-                            const imgElement = movedCardElement.querySelector('.card-image');
-                            const imagePlaceholder = movedCardElement.querySelector('.image-placeholder');
-                            const dateBar = movedCardElement.querySelector('.date-bar');
-
-                            if (imageFileNameBase && imgElement) {
-                                const imageUrl = getImageUrl(imageFileNameBase);
-                                imgElement.src = imageUrl;
-
-                                // 画像読み込み成功時、アニメーションを開始
-                                imgElement.onload = () => {
-                                    imgElement.style.opacity = '1'; // 画像を表示 (フェードイン)
-                                    imgElement.style.display = 'block'; // 画像を表示
-                                    if (imagePlaceholder) imagePlaceholder.style.display = 'none'; // Placeholderを非表示
-                                    if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
-
-                                    // requestAnimationFrame を使用して、要素がDOMに追加され、
-                                    // 初期スタイルが適用された後にトランジションを開始
-                                    requestAnimationFrame(() => {
-                                        // card-entering クラスを削除してトランジションをトリガー
-                                        movedCardElement.classList.remove('card-entering');
-                                    });
-                                };
-
-                                // 画像読み込み失敗時
-                                imgElement.onerror = () => {
-                                     imgElement.style.display = 'none'; // 画像を非表示
-                                     if (imagePlaceholder) {
-                                          imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                                          imagePlaceholder.innerText = '画像なし'; // またはエラーメッセージ
-                                     }
-                                     if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
-                                     console.warn(`Failed to load image for card ${selectedFrontCardNo} at URL: ${imageUrl}`);
-
-                                     // 画像読み込み失敗時もアニメーションを開始
-                                     requestAnimationFrame(() => {
-                                         movedCardElement.classList.remove('card-entering');
-                                     });
-                                };
-
-                            } else {
-                                // 画像ファイル名ベースがない場合やimg要素が見つからない場合
-                                if (imgElement) imgElement.style.display = 'none'; // 画像を非表示
-                                if (imagePlaceholder) {
-                                     imagePlaceholder.style.display = 'flex'; // Placeholderを表示
-                                     imagePlaceholder.innerText = imageFileNameBase ? '画像要素なし' : '画像ファイル名なし';
-                                }
-                                if (dateBar) dateBar.style.display = 'block'; // 日付バーは表示
-
-                                // 画像がない場合もアニメーションを開始
-                                requestAnimationFrame(() => {
-                                     movedCardElement.classList.remove('card-entering');
-                                });
-                            }
-
-
-                            // 共通の場のカードリストに移動したカードを追加（データ更新）
-                            if (backIndex > -1) {
-                                if (selectedBackCardButton === 'left') {
-                                    commonCards.splice(backIndex, 0, parseInt(selectedFrontCardNo)); // 左に挿入
-                                } else {
-                                    commonCards.splice(backIndex + 1, 0, parseInt(selectedFrontCardNo)); // 右に挿入
-                                }
-                                console.log("更新された場札データ:", commonCards);
-                                // DOMは直接操作したので、updateCommonDisplay() は不要
-                                // 新しいカード要素のボタンにイベントリスナーを設定
-                                setupBackCardButtonListeners(movedCardElement, selectedFrontCardNo);
-
-                            } else {
-                                console.warn(`エラー: 場札データからターゲットカード ${selectedBackCardNo} を見つけられませんでした。`);
-                                // データ更新に失敗した場合のフォールバック処理（例: 捨て札へ移動）
-                                addCardToDiscard(parseInt(selectedFrontCardNo));
-                                // 場札に追加した要素も削除
-                                if (movedCardElement && movedCardElement.parentNode) {
-                                    movedCardElement.parentNode.removeChild(movedCardElement);
-                                }
-                            }
-
-                            // 山札から1枚引いて手札に追加
-                            if (handCards.length === 0) {
-                                endGame("ゲームクリア！手札がなくなりました！");
-                            } else {
-                                console.log("山札からカードを引く処理を開始します。");
-                                const drawnCardNo = drawCard();
-                                if (drawnCardNo !== null) {
-                                    addCardToHand(drawnCardNo); // addCardToHand内で手札表示更新
-                                    console.log(`山札からカード ${drawnCardNo} を引いて手札に追加しました。`);
-                                } else {
-                                    console.log("山札が空のためカードを引けません。");
-                                    // 山札が空でカードが引けない場合はゲームオーバー
-                                    endGame("ゲームオーバー！山札が空です。");
-                                }
-                            }
-
-                            resetSelectionState(); // 選択状態をリセット
-                            console.log('決定処理完了（成功）。');
-
-                       } else {
-                            console.warn(`エラー: 場札のターゲット要素 ${selectedBackCardNo} がDOMで見つかりませんでした。`);
-                            // ターゲット要素が見つからない場合、失敗として扱う
-                            addCardToDiscard(parseInt(selectedFrontCardNo));
-                            // 山札から1枚引いて手札に追加
-                            if (handCards.length === 0) {
-                                endGame("ゲームクリア！手札がなくなりました！");
-                            } else {
-                                console.log("山札からカードを引く処理を開始します。");
-                                const drawnCardNo = drawCard();
-                                if (drawnCardNo !== null) {
-                                    addCardToHand(drawnCardNo);
-                                    console.log(`山札からカード ${drawnCardNo} を引いて手札に追加しました。`);
-                                } else {
-                                    console.log("山札が空のためカードを引けません。");
-                                    endGame("ゲームオーバー！山札が空です。");
-                                }
-                            }
-                            resetSelectionState(); // 選択状態をリセット
-                            console.log('決定処理完了（ターゲット要素なし）。');
-                       }
-
-
-                   } else {
-                       // 失敗: 手札から移動したカードを捨て札に移動
-                       addCardToDiscard(parseInt(selectedFrontCardNo));
-                       console.log(`失敗: カード ${selectedFrontCardNo} を捨て札に移動しました。`);
-
-                       // 山札から1枚引いて手札に追加
-                       if (handCards.length === 0) {
-                           endGame("ゲームクリア！手札がなくなりました！");
-                       } else {
-                           console.log("山札からカードを引く処理を開始します。");
-                           const drawnCardNo = drawCard();
-                           if (drawnCardNo !== null) {
-                               addCardToHand(drawnCardNo); // addCardToHand内で手札表示更新
-                               console.log(`山札からカード ${drawnCardNo} を引いて手札に追加しました。`);
-                           } else {
-                               console.log("山札が空のためカードを引けません。");
-                               endGame("ゲームオーバー！山札が空です。");
-                           }
-                       }
-                       resetSelectionState(); // 選択状態をリセット
-                       console.log('決定処理完了（失敗）。');
-                   }
-
-                } else {
-                   console.warn('決定ボタンがクリックされましたが、場札のターゲット要素が見つかりませんでした。');
-                   // 場札のターゲット要素が見つからない場合、失敗として扱う
-                   addCardToDiscard(parseInt(selectedFrontCardNo));
-                    // 山札から1枚引いて手札に追加
-                    if (handCards.length === 0) {
-                        endGame("ゲームクリア！手札がなくなりました！");
-                    } else {
-                        console.log("山札からカードを引く処理を開始します。");
-                        const drawnCardNo = drawCard();
-                        if (drawnCardNo !== null) {
-                            addCardToHand(drawnCardNo);
-                            console.log(`山札からカード ${drawnCardNo} を引いて手札に追加しました。`);
-                        } else {
-                            console.log("山札が空のためカードを引けません。");
-                            endGame("ゲームオーバー！山札が空です。");
-                        }
-                    }
-                    resetSelectionState(); // 選択状態をリセット
-                    console.log('決定処理完了（場札ターゲット要素なし）。');
+                    cardListBody.appendChild(tr);
                 }
-
-            } else {
-                console.warn('決定ボタンは無効です。必要なカード要素が見つかりませんでした。');
-            }
-        }
-    }
-
-
-    // カードナンバーに基づいて表面表示用のHTMLを生成する関数
-    function createFrontCardHTML(cardNo) {
-         const detail = cardDetails[cardNo];
-         const title = detail["タイトル"] || "タイトル不明";
-
-         return `
-             <div class="card-container" style="display: flex; flex-direction: column; align-items: center; margin-right: 20px;" data-card-number="${cardNo}"> <div class="card">
-                     <div class="card-button select-button" style="top: 5px; left: 5px;">
-                       <button id="select-button-${cardNo}" style="padding: 5px; font-size: small;" data-card-number="${cardNo}" onclick="toggleSelect('select-button-${cardNo}', '${cardNo}')">選択</button>
-                     </div>
-                     <div class="card-content-area">
-                         <img src="" class="card-image" alt="Card Image" style="display: none;">
-                         <div class="image-placeholder" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: small; color: #666;">読み込み中...</div>
-                     </div>
-                     <div class="card-title-bar">${title}</div>
-                 </div>
-             </div>
-         `;
-    }
-
-
-    // カードナンバーに基づいて裏面表示用のHTMLを生成する関数 (場札用 - 左右ボタン付き)
-    function createBackCardHTML(cardNo) {
-        const detail = cardDetails[cardNo];
-        const year = detail["年"] || "不明";
-        const month = detail["月"] === null ? "不明" : detail["月"];
-        const day = detail["日"] === null ? "不明" : detail["日"];
-        const title = detail["タイトル"] || "タイトル不明";
-
-        return `
-            <div class="card-container card-back-container" style="display: flex; flex-direction: column; align-items: center; margin-right: 20px;" data-card-number="${cardNo}"> <div class="card card-back">
-                    <div class="card-button left-button" style="top: 5px; left: 5px;">
-                      <button id="left-button-${cardNo}" style="padding: 5px; font-size: small;" onclick="handleLeftClick('left-button-${cardNo}', '${cardNo}')">左</button>
-                    </div>
-                    <div class="card-button right-button" style="top: 5px; right: 5px;">
-                      <button id="right-button-${cardNo}" style="padding: 5px; font-size: small;" onclick="handleRightClick('right-button-${cardNo}', '${cardNo}')">右</button>
-                    </div>
-                    <div class="card-content-area">
-                        <img src="" class="card-image" alt="Card Image" style="display: none;">
-                        <div class="image-placeholder" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: small; color: #666;">読み込み中...</div>
-                    </div>
-                    <div class="date-bar">
-                        年: ${year}<br>月: ${month} 日: ${day}
-                    </div>
-                    <div class="card-title-bar">${title}</div>
-                 </div>
-             </div>
-         `;
-    }
-
-     // カードナンバーに基づいて裏面表示用のHTMLを生成する関数 (捨て札用 - 確認ボタン付き)
-    function createDiscardCardHTML(cardNo) {
-         const detail = cardDetails[cardNo];
-         const year = detail["年"] || "不明";
-         const month = detail["月"] === null ? "不明" : detail["月"];
-         const day = detail["日"] === null ? "不明" : detail["日"];
-         const title = detail["タイトル"] || "タイトル不明";
-
-         return `
-             <div class="card-container card-back-container" style="display: flex; flex-direction: column; align-items: center; margin-right: 20px;" data-card-number="${cardNo}"> <div class="card card-back">
-                     <div class="card-button discard-confirm-button" style="top: 5px; left: 5px;">
-                        <button onclick="showDiscardCardInfo('${cardNo}')">確認</button>
-                     </div>
-                     <div class="card-content-area">
-                         <img src="" class="card-image" alt="Card Image" style="display: none;">
-                         <div class="image-placeholder" style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; font-size: small; color: #666;">読み込み中...</div>
-                     </div>
-                     <div class="date-bar">
-                         年: ${year}<br>月: ${month} 日: ${day}
-                     </div>
-                     <div class="card-title-bar">${title}</div>
-                 </div>
-             </div>
-         `;
-    }
-
-
-    // 選択状態をリセット
-    function resetSelectionState() {
-        console.log("Resetting selection state.");
-        // 手札の選択状態をリセット
-        if (selectedFrontCardNo !== null) {
-            const allSelectButtons = document.querySelectorAll('#hand-field button[id^="select-button-"]');
-              allSelectButtons.forEach(btn => {
-                  const btnCardNumber = btn.getAttribute('data-card-number');
-                   // 現在選択中のカードと一致する場合のみリセット
-                   if (btnCardNumber === selectedFrontCardNo) {
-                        btn.innerText = '選択';
-                        console.log(`Resetting button text for card ${btnCardNumber}`);
-                   }
-              });
-            selectedFrontCardNo = null;
-            console.log(`selectedFrontCardNo reset to ${selectedFrontCardNo}`);
-        }
-
-        // 裏面ボタンの表示をリセット
-        if (lastSelectedBackButtonElement) {
-             if (lastSelectedBackButtonElement.id.startsWith('left-button-')) {
-                 lastSelectedBackButtonElement.innerText = '左';
-             } else if (lastSelectedBackButtonElement.id.startsWith('right-button-')) {
-                 lastSelectedBackButtonElement.innerText = '右';
-             }
-             console.log(`Resetting back button text for ${lastSelectedBackButtonElement.id}`);
-             lastSelectedBackButtonElement = null; // 記録した要素をクリア
-        }
-
-        selectedBackCardNo = null;
-        selectedBackCardButton = null; // 裏面選択ボタンの状態もリセット
-        console.log(`selectedBackCardNo reset to ${selectedBackCardNo}, selectedBackCardButton reset to ${selectedBackCardButton}`);
-
-
-        updateInfoPanelDefault(); // カード情報パネルをデフォルトに戻す
-        updateDebugPanel(); // デバッグパネルの表示を更新 (カード詳細もクリアされる)
-        updateDecisionButtonState(); // 決定ボタンの状態を更新
-         console.log("Selection state reset complete.");
-    }
-
-    // ゲームをリスタートする関数
-    function restartGame() {
-        console.log("Restarting game...");
-        // 現在の手札枚数設定をlocalStorageに保存してから再読み込み
-        const initialHandSizeInput = document.getElementById('initial-hand-size');
-        localStorage.setItem(LOCAL_STORAGE_HAND_SIZE_KEY, initialHandSizeInput.value);
-        location.reload(); // ページを再読み込みしてゲームをリスタート
-    }
-
-    // ページ読み込み完了後にCSVを読み込み、ゲームを初期化
-    document.addEventListener('DOMContentLoaded', (event) => {
-        console.log('DOMContentLoaded event fired. Attempting to fetch CSV from:', csvUrl); // デバッグログ
-
-        fetch(csvUrl)
-            .then(response => {
-                if (!response.ok) {
-                    // レスポンスがOKでない場合、詳細なエラー情報をログに出力
-                    console.error(`HTTP error! status: ${response.status}, text: ${response.statusText}`);
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.text();
-            })
-            .then(csvText => {
-                console.log('CSV data fetched successfully.'); // デバッグログ
-                // CSVデータを解析
-                const parsedData = parseCardData(csvText);
-                 console.log('CSV data parsed:', parsedData); // デバッグログ
-
-                // カードデータが正常に解析されたか確認
-                if (Object.keys(parsedData.cardDetails).length > 0) {
-                     console.log('Initializing game...'); // デバッグログ
-                     // ゲームを初期化
-                     initializeGame(parsedData);
-                     console.log('Game initialized.'); // デバッグログ
-                } else {
-                     // カードデータが不足している場合のエラーメッセージを表示
-                     document.getElementById('game-message').innerText = 'カードデータが不足しています。ゲームを開始できません。データ形式を確認してください。';
-                     document.getElementById('game-message').style.color = 'red';
-                     document.getElementById('decision-button').disabled = true; // ボタンを無効化
-                     console.error("カードデータの解析に失敗しました。");
-                }
-            })
-            .catch(error => {
-                console.error('CSVファイルの読み込み中にエラーが発生しました:', error);
-                // エラーメッセージをユーザーに表示するなどの処理
-                document.getElementById('game-message').innerText = `カードデータの読み込みに失敗しました。エラー: ${error.message}。ファイル (${csvUrl}) が正しく配置されているか、CORSの問題がないか確認してください。`;
-                document.getElementById('game-message').style.color = 'red';
-                 document.getElementById('decision-button').disabled = true; // ボタンを無効化
             });
-    });
-
-
-    // 手札枚数入力フィールドの値が変更されたときにlocalStorageに保存
-    document.getElementById('initial-hand-size').addEventListener('change', (event) => {
-        const newHandSize = parseInt(event.target.value);
-        // 有効な数値であることを確認してから保存
-        if (!isNaN(newHandSize) && newHandSize >= 1) {
-             localStorage.setItem(LOCAL_STORAGE_HAND_SIZE_KEY, newHandSize);
-             console.log(`手札枚数設定をlocalStorageに保存しました: ${newHandSize}`);
-        } else {
-            console.warn("不正な手札枚数入力です。保存しません。");
         }
-    });
 
-</script>
-
+        document.addEventListener('DOMContentLoaded', () => {
+            // Display Small Improvement Cards
+            displayCsv(smallImprovementCsvText, 'small-improvement-body');
+            // Display Job Cards
+            displayCsv(jobCardCsvText, 'job-card-body');
+        });
+    </script>
 </body>
 </html>
